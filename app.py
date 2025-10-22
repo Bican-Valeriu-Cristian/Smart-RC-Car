@@ -1,5 +1,3 @@
-
-
 from flask import Flask, Response
 from picamera2 import Picamera2
 import cv2
@@ -7,7 +5,7 @@ import cv2
 app = Flask(__name__)
 
 cam = Picamera2()
-cam.configure(cam.create_video_configuration(main={"size": (1920, 1080)}))
+cam.configure(cam.create_video_configuration(main={"size": (640, 480)}))  // trb incercat cu 640x640 bun pt detectie yolo
 cam.start()
 
 def generate():
@@ -27,7 +25,7 @@ def index():
       </head>
       <body style="background-color:black; color:white; text-align:center;">
         <h1>SmartCar</h1>
-        <img src="/video" width="1000" height="580">
+        <img src="/video" width="720" height="480">
       </body>
     </html>
     '''
