@@ -1,5 +1,4 @@
-# Live video minimal cu Raspberry Pi Camera
-# Autor: <Numele tau> - Proiect Licenta "SmartCar"
+
 
 from flask import Flask, Response
 from picamera2 import Picamera2
