@@ -1,137 +1,105 @@
 from flask import Flask, Response, request, jsonify
-import cv2, time
-from threading import Thread, Lock
+import cv2
 from picamera2 import Picamera2
-import motor, sensor  # presupunem că motor.py e corect
+import motor, sensor  # eu folosesc motoarele și senzorul
 
 app = Flask(__name__)
 
 # ------------------- SETĂRI CONTROL -------------------
-RADIUS = 100.0
-DEADZONE = 0.10
-MAX_OUT = 100
-TURN_K = 1.0
+# eu țin aceleași constante ca să fie previzibil
+RADIUS = 100.0    # egal cu radius-ul din joystick (frontend)
+DEADZONE = 0.08   # eu ignor micile variații din centru
+MAX_OUT = 100     # ieșirea maximă pentru motoare (%)
+TURN_K = 1.0      # factor de viraj (1 = normal)
 
-# Obstacol
-OBSTACLE_THRESHOLD_CM = 20     # modifici aici pragul
-DIST_HZ = 10                   # frecvența citirii senzorului în thread (citiri/s)
+def clamp(v, lo, hi):
+    # eu limitez o valoare între [lo, hi]
+    return max(lo, min(hi, v))
 
-def clamp(v, lo, hi): return max(lo, min(hi, v))
-def apply_deadzone(v, dz=DEADZONE): return 0.0 if abs(v) < dz else v
+def apply_deadzone(v, dz=DEADZONE):
+    # eu fac zona moartă ca să nu tremure pe centru
+    return 0.0 if abs(v) < dz else v
 # ------------------------------------------------------
 
 
 # -------------------- CAMERA --------------------------
+# eu pornesc camera și trimit MJPEG către browser
 cam = Picamera2()
 cam.configure(cam.create_video_configuration(main={"size": (640, 480)}))
 cam.start()
 
 def mjpeg():
+    # eu captez cadre, le encodez JPG și le trimit ca stream
     while True:
         frame = cam.capture_array()
+        # eu scriu un mic text pe video ca să văd că merge
         cv2.putText(frame, "SmartCar", (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+        ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         if ok:
             yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' +
                    jpg.tobytes() + b'\r\n')
 # ------------------------------------------------------
 
 
-# --------------- SENZOR: THREAD + CACHE ---------------
-_last_distance = -1.0
-_last_distance_ts = 0.0
-_sensor_lock = Lock()
-
-def _sensor_loop():
-    global _last_distance, _last_distance_ts
-    period = 1.0 / DIST_HZ
-    while True:
-        with _sensor_lock:
-            d = sensor.get_distance_cm()
-        _last_distance = d
-        _last_distance_ts = time.time()
-        time.sleep(period)
-
-def obstacle_cached(threshold_cm=OBSTACLE_THRESHOLD_CM, max_age=0.3):
-    """
-    True dacă ultima citire este proaspătă (< max_age sec) și sub prag.
-    Dacă nu e proaspătă/validă, returnăm False (nu blocăm).
-    """
-    age = time.time() - _last_distance_ts
-    if age > max_age or _last_distance < 0:
-        return False
-    return _last_distance <= threshold_cm
-
-# Pornește threadul de citire a senzorului
-sensor_thread = Thread(target=_sensor_loop, daemon=True)
-sensor_thread.start()
-# ------------------------------------------------------
-
-
 # -------------------- RUTE SERVER ---------------------
 @app.route('/')
 def index():
+    # eu servesc pagina principală
     with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 @app.route('/video')
 def video():
+    # eu servesc fluxul video în format MJPEG
     return Response(mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/distance')
 def distance():
-    d = _last_distance
-    return jsonify(distance=round(d, 1) if isinstance(d, (int, float)) and d >= 0 else -1)
+    # eu doar măsor și întorc distanța (NU opresc mașina)
+    cm = sensor.distance_cm()
+    return jsonify(ok=(cm is not None), cm=(cm if cm is not None else 0.0))
 
 @app.route('/drive', methods=['POST'])
 def drive():
+    # eu primesc datele de la joystick (x, y, speed, angle)
     d = request.get_json(silent=True) or {}
+
+    # eu extrag valorile ca întregi
     x = int(d.get('x', 0))
     y = int(d.get('y', 0))
-    speed = int(d.get('speed', 0))
+    speed = int(d.get('speed', 0))  # cât de tare împing joystickul
+    # angle îl primesc, dar nu-l folosesc aici
 
-    # STOP hard dacă joystick-ul e în centru
-    if x == 0 and y == 0:
-        motor.stop()
-        return jsonify(ok=True, left=0, right=0, x=x, y=y, speed=0)
-
+    # 1) normalizare în [-1, 1]; invers y ca să fie sus = înainte
     nx = clamp(x / RADIUS, -1, 1)
     ny = clamp(-y / RADIUS, -1, 1)
 
+    # 2) zona moartă
     nx = apply_deadzone(nx)
     ny = apply_deadzone(ny)
 
-    # după deadzone, dacă suntem pe centru -> STOP
-    if nx == 0.0 and ny == 0.0:
-        motor.stop()
-        return jsonify(ok=True, left=0, right=0, x=x, y=y, speed=0)
-
-    # verificare obstacol în față (când vrem să mergem înainte: ny > 0)
-    if ny > 0 and obstacle_cached():
-        motor.stop()
-        return jsonify(ok=True, left=0, right=0, x=x, y=y, speed=0, obstacle=True)
-
+    # 3) viraj stânga/dreapta
     turn = nx * TURN_K
-    left_u = clamp(ny + turn, -1, 1)
+    left_u  = clamp(ny + turn, -1, 1)
     right_u = clamp(ny - turn, -1, 1)
 
+    # 4) aplic accelerația generală
     s = clamp(speed / 100.0, 0, 1)
-    if s == 0:
-        motor.stop()
-        return jsonify(ok=True, left=0, right=0, x=x, y=y, speed=0)
-
-    left = int(left_u * s * MAX_OUT)
+    left  = int(left_u  * s * MAX_OUT)
     right = int(right_u * s * MAX_OUT)
 
+    # 5) eu trimit efectiv la motoare (nu opresc pentru obstacole)
     motor.set_left(left)
     motor.set_right(right)
 
-    return jsonify(ok=True, left=left, right=right, x=x, y=y, speed=s)
+    # eu trimit înapoi valori pentru debug în UI
+    return jsonify(ok=True, left=left, right=right, x=x, y=y, speed=speed)
 # ------------------------------------------------------
 
 
 # -------------------- MAIN ----------------------------
 if __name__ == '__main__':
+    # eu pornesc serverul Flask pe toate interfețele
     app.run(host='0.0.0.0', port=8000, threaded=True)
 # ------------------------------------------------------

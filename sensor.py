@@ -1,58 +1,42 @@
-# sensor.py - HC-SR04P simplu (GPIO.BOARD – pinuri fizice)
-import RPi.GPIO as GPIO
-import time
+# sensor.py – HC-SR04P pe BOARD (TRIG=26, ECHO=29)
+# eu fac codul cât mai scurt: doar măsor și întorc distanța în cm (sau None)
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setwarnings(False)
+import RPi.GPIO as GPIO, time
+from statistics import median
 
-TRIG = 26  # pin fizic 37? (verifică placa ta; atenție la confuzie)
-ECHO = 29  # pin fizic 40? (verifică)
+# eu setez modul și pinii
+GPIO.setmode(GPIO.BOARD); GPIO.setwarnings(False)
+TRIG, ECHO = 26, 29
+GPIO.setup(TRIG, GPIO.OUT); GPIO.setup(ECHO, GPIO.IN)
+SPEED_CM_S = 34300.0  # viteza sunetului ~343 m/s
 
-GPIO.setup(TRIG, GPIO.OUT)
-GPIO.setup(ECHO, GPIO.IN)
+def _once(timeout=0.04):
+    """eu fac o măsurătoare; întorc cm sau None dacă e timeout/zgomot"""
+    # eu trimit un puls scurt (10us) pe TRIG
+    GPIO.output(TRIG, GPIO.LOW); time.sleep(2e-6)
+    GPIO.output(TRIG, GPIO.HIGH); time.sleep(1e-5)
+    GPIO.output(TRIG, GPIO.LOW)
 
-def _read_once():
-    # puls TRIG scurt LOW -> HIGH -> LOW
-    GPIO.output(TRIG, False)
-    time.sleep(0.000002)   # 2us
-    GPIO.output(TRIG, True)
-    time.sleep(0.00001)    # 10us
-    GPIO.output(TRIG, False)
-
-    # așteptăm începutul impulsului pe ECHO (max 20ms)
-    start = time.time()
-    timeout = start + 0.02
+    t0 = time.monotonic()
     while GPIO.input(ECHO) == 0:
-        start = time.time()
-        if start > timeout:
-            return -1
-
-    # măsurăm durata impulsului HIGH (max 20ms)
-    stop = time.time()
-    timeout = stop + 0.02
+        if time.monotonic() - t0 > timeout: return None
+    start = time.monotonic()
     while GPIO.input(ECHO) == 1:
-        stop = time.time()
-        if stop > timeout:
-            return -1
+        if time.monotonic() - start > timeout: return None
 
-    # durata în secunde -> cm (dus-întors)
-    return (stop - start) * 17150.0
+    dt = time.monotonic() - start  # eu calculez durata
+    cm = (dt * SPEED_CM_S) / 2.0   # dus-întors -> împart la 2
+    return cm if 1.0 < cm < 500.0 else None
 
-def get_distance_cm():
-    """Întoarce distanța în cm sau -1 dacă e eroare, cu 3 încercări."""
-    for _ in range(3):
-        d = _read_once()
-        if d > 0:
-            return d
-        time.sleep(0.01)
-    return -1
-
-def is_obstacle(threshold_cm=15):
-    """True dacă există obstacol mai aproape decât threshold_cm."""
-    d = get_distance_cm()
-    if d < 0:
-        return False  # citire aiurea, nu blocăm
-    return d <= threshold_cm
+def distance_cm(samples=5):
+    """eu iau câteva probe rapide și întorc mediana pentru stabilitate"""
+    vals = []
+    for _ in range(max(1, samples)):
+        v = _once()
+        if v is not None: vals.append(v)
+        time.sleep(0.005)  # eu las un mic răgaz
+    return float(median(vals)) if vals else None
 
 def cleanup():
-    GPIO.cleanup((TRIG, ECHO))
+    """eu eliberez GPIO la închidere (opțional)"""
+    GPIO.cleanup()
