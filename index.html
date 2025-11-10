@@ -6,85 +6,85 @@
     <title>Smart RC Car</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/static/style.css?v=3">
-
 </head>
 
 <body>
     <h1>Smart RC Car</h1>
 
     <div class="page">
-        <!--Flux live-->
         <section class="panel video-wrap">
             <img src="/video" alt="Flux video" />
             <p id="status">Status...</p>
         </section>
 
-        <!--Joystick -->
         <section class="panel">
             <h2 class="joy-header">Joystick</h2>
             <p class="telemetry">
                 X: <span id="x_coordinate">0</span> &nbsp;
                 Y: <span id="y_coordinate">0</span> &nbsp;
                 Speed: <span id="speed">0</span> % &nbsp;
-                Angle: <span id="angle">0</span>
+                Angle: <span id="angle">0</span>;
+                Dist: <span id="distance">--</span> cm;
             </p>
 
             <canvas id="canvas" name="game"></canvas>
-
         </section>
     </div>
 
-
-    <!--script joystick--->
     <script>
-
-        var canvas, ctx;
+        let canvas, ctx;
+        let width, height, radius = 100;
+        let x_orig, y_orig;
+        let coord = { x: 0, y: 0 };
+        let paint = false;
 
         window.addEventListener('load', () => {
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
+
             resize();
 
-            document.addEventListener('mousedown', startDrawing);
+            // Mouse
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', Draw);
             document.addEventListener('mouseup', stopDrawing);
-            document.addEventListener('mousemove', Draw);
 
-            document.addEventListener('touchstart', startDrawing);
+            // Touch
+            canvas.addEventListener('touchstart', startDrawing, { passive: false });
+            canvas.addEventListener('touchmove', Draw, { passive: false });
             document.addEventListener('touchend', stopDrawing);
             document.addEventListener('touchcancel', stopDrawing);
-            document.addEventListener('touchmove', Draw);
+
             window.addEventListener('resize', resize);
 
-            document.getElementById("x_coordinate").innerText = 0;
-            document.getElementById("y_coordinate").innerText = 0;
-            document.getElementById("speed").innerText = 0;
-            document.getElementById("angle").innerText = 0;
+            resetTelemetry();
         });
 
-        var width, height, radius, x_orig, y_orig;
         function resize() {
             width = document.querySelector('.panel:last-of-type').clientWidth || window.innerWidth;
-            radius = 100;
             height = radius * 5;
-            ctx.canvas.width = width;
-            ctx.canvas.height = height;
-            background();
-            joystick(width / 2, height / 3);
-        }
 
-        function background() {
+            canvas.width = width;
+            canvas.height = height;
+
             x_orig = width / 2;
             y_orig = height / 3;
 
+            drawBackground();
+            drawJoystick(x_orig, y_orig);
+        }
+
+        function drawBackground() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.beginPath();
             ctx.arc(x_orig, y_orig, radius / 2 + 10, 0, Math.PI * 2, true);
             ctx.fillStyle = '#ECE5E5';
             ctx.fill();
         }
 
-        function joystick(width, height) {
+        function drawJoystick(x, y) {
             ctx.beginPath();
-            ctx.arc(width, height, radius / 2, 0, Math.PI * 2, true);
+            ctx.arc(x, y, radius / 2, 0, Math.PI * 2, true);
             ctx.fillStyle = '#F08080';
             ctx.fill();
             ctx.strokeStyle = '#F6ABAB';
@@ -92,87 +92,104 @@
             ctx.stroke();
         }
 
-        let coord = { x: 0, y: 0 };
-        let paint = false;
-
         function getPosition(event) {
-            var mouse_x = event?.clientX || (event?.touches && event.touches[0]?.clientX) || coord.x;
-            var mouse_y = event?.clientY || (event?.touches && event.touches[0]?.clientY) || coord.y;
-            coord.x = mouse_x - canvas.getBoundingClientRect().left;
-            coord.y = mouse_y - canvas.getBoundingClientRect().top;
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (event.touches && event.touches[0]) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else if (event.changedTouches && event.changedTouches[0]) {
+                clientX = event.changedTouches[0].clientX;
+                clientY = event.changedTouches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            coord.x = clientX - rect.left;
+            coord.y = clientY - rect.top;
         }
 
-        function is_it_in_the_circle() {
-            var current_radius = Math.sqrt(Math.pow(coord.x - x_orig, 2) + Math.pow(coord.y - y_orig, 2));
-            if (radius >= current_radius) return true
-            else return false
+        function isInsideCircle() {
+            const dx = coord.x - x_orig;
+            const dy = coord.y - y_orig;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance <= radius;
         }
 
         function startDrawing(event) {
-            paint = true;
+            event.preventDefault?.();
             getPosition(event);
-            if (is_it_in_the_circle()) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                background();
-                joystick(coord.x, coord.y);
-                Draw();
-            }
+            if (!isInsideCircle()) return;
+
+            paint = true;
+            drawBackground();
+            drawJoystick(coord.x, coord.y);
+            Draw(event);
         }
 
+        // ✅ Trimită STOP indiferent de starea 'paint'
         function stopDrawing() {
             paint = false;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            background();
-            joystick(width / 2, height / 3);
-            document.getElementById("x_coordinate").innerText = 0;
-            document.getElementById("y_coordinate").innerText = 0;
-            document.getElementById("speed").innerText = 0;
-            document.getElementById("angle").innerText = 0;
+            drawBackground();
+            drawJoystick(x_orig, y_orig);
+            resetTelemetry();
+            if (typeof send === 'function') {
+                send(0, 0, 0, 0);
+            }
         }
 
         function Draw(event) {
-            if (paint) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                background();
-                var angle_in_degrees, x, y, speed;
-                var angle = Math.atan2((coord.y - y_orig), (coord.x - x_orig));
+            if (!paint) return;
+            event.preventDefault?.();
+            getPosition(event);
 
-                if (Math.sign(angle) == -1) {
-                    angle_in_degrees = Math.round(-angle * 180 / Math.PI);
-                }
-                else {
-                    angle_in_degrees = Math.round(360 - angle * 180 / Math.PI);
-                }
+            drawBackground();
 
-                if (is_it_in_the_circle()) {
-                    joystick(coord.x, coord.y);
-                    x = coord.x;
-                    y = coord.y;
-                }
-                else {
-                    x = radius * Math.cos(angle) + x_orig;
-                    y = radius * Math.sin(angle) + y_orig;
-                    joystick(x, y);
-                }
+            const dx = coord.x - x_orig;
+            const dy = coord.y - y_orig;
 
-                getPosition(event);
+            let angle = Math.atan2(dy, dx);
+            let angle_in_degrees = (angle < 0)
+                ? Math.round(-angle * 180 / Math.PI)
+                : Math.round(360 - angle * 180 / Math.PI);
 
-                var speed = Math.round(100 * Math.sqrt(Math.pow(x - x_orig, 2) + Math.pow(y - y_orig, 2)) / radius);
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-                var x_relative = Math.round(x - x_orig);
-                var y_relative = Math.round(y - y_orig);
+            let x, y;
+            if (distance <= radius) {
+                x = coord.x; y = coord.y;
+            } else {
+                x = radius * Math.cos(angle) + x_orig;
+                y = radius * Math.sin(angle) + y_orig;
+            }
 
-                document.getElementById("x_coordinate").innerText = x_relative;
-                document.getElementById("y_coordinate").innerText = y_relative;
-                document.getElementById("speed").innerText = speed;
-                document.getElementById("angle").innerText = angle_in_degrees;
+            drawJoystick(x, y);
 
+            const speed = Math.round(100 * Math.sqrt((x - x_orig) ** 2 + (y - y_orig) ** 2) / radius);
+            const x_relative = Math.round(x - x_orig);
+            const y_relative = Math.round(y - y_orig);
+
+            updateTelemetry(x_relative, y_relative, speed, angle_in_degrees);
+
+            if (typeof send === 'function') {
                 send(x_relative, y_relative, speed, angle_in_degrees);
             }
         }
+
+        function updateTelemetry(x, y, speed, angle) {
+            document.getElementById("x_coordinate").innerText = x;
+            document.getElementById("y_coordinate").innerText = y;
+            document.getElementById("speed").innerText = speed;
+            document.getElementById("angle").innerText = angle;
+        }
+
+        function resetTelemetry() {
+            updateTelemetry(0, 0, 0, 0);
+        }
     </script>
 
-    <script src="static/app.js"></script>
+    <script src="/static/app.js"></script>
 </body>
 
 </html>
