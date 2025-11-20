@@ -5,22 +5,28 @@
     <meta charset="utf-8" />
     <title>Smart RC Car</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/static/style.css?v=3">
+    <link rel="stylesheet" href="/static/style.css?v=11">
+    <script src="/static/app.js?v=11"></script>
+    <style>
+        /* Mic fix pentru a preveni selectarea textului accidental pe mobil cand folosesti joystick-ul */
+        canvas {
+            touch-action: none;
+            /* Foarte important pentru Chrome/Safari pe mobil */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
 </head>
 
 <body>
     <h1>Smart RC Car</h1>
 
     <div class="page">
-        <!-- Flux live -->
         <section class="panel video-wrap">
-            <!-- eu iau fluxul MJPEG direct din /video -->
             <img src="/video" alt="Flux video" />
-            <!-- aici arăt distanța citită de senzor (eu o actualizez din JS) -->
             <p id="status">Distanță: ...</p>
         </section>
 
-        <!-- Joystick -->
         <section class="panel">
             <h2 class="joy-header">Joystick</h2>
             <p class="telemetry">
@@ -34,59 +40,50 @@
         </section>
     </div>
 
-    <!-- script joystick -->
     <script>
-        // eu referențiez canvas-ul și setez evenimentele pe input
         var canvas, ctx;
-
-        // eu pornesc un mic polling ca să citesc distanța de pe server
-        function pollDistance() {
-            fetch('/distance')
-                .then(r => r.json())
-                .then(d => {
-                    const cm = (typeof d.cm === 'number') ? d.cm.toFixed(1) : '...';
-                    const ok = d.ok === true;
-                    const text = ok ? `Distanță: ${cm} cm` : 'Distanță: ...';
-                    document.getElementById('status').innerText = text;
-                })
-                .catch(() => {
-                    document.getElementById('status').innerText = 'Distanță: ...';
-                });
-        }
 
         window.addEventListener('load', () => {
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
             resize();
 
-            // eu leg input-urile de mouse/touch
+            // --- Evenimente MOUSE ---
             document.addEventListener('mousedown', startDrawing);
             document.addEventListener('mouseup', stopDrawing);
             document.addEventListener('mousemove', Draw);
 
-            document.addEventListener('touchstart', startDrawing);
+            // --- Evenimente TOUCH (Mobil/Tableta) ---
+            // 'passive: false' este critic pentru a putea bloca scroll-ul paginii
+            document.addEventListener('touchstart', startDrawing, { passive: false });
             document.addEventListener('touchend', stopDrawing);
             document.addEventListener('touchcancel', stopDrawing);
-            document.addEventListener('touchmove', Draw);
+            document.addEventListener('touchmove', Draw, { passive: false });
+
             window.addEventListener('resize', resize);
 
-            // eu resetez telemetria pe 0 la start
+            // Failsafe: oprește mașina dacă mouse-ul părăsește zona sau fereastra pierde focus
+            canvas.addEventListener('mouseleave', stopDrawing);
+            window.addEventListener('blur', stopDrawing);
+
+            // Resetare vizuală la start
+            resetTelemetry();
+        });
+
+        // Funcție helper pentru resetarea textului
+        function resetTelemetry() {
             document.getElementById("x_coordinate").innerText = 0;
             document.getElementById("y_coordinate").innerText = 0;
             document.getElementById("speed").innerText = 0;
             document.getElementById("angle").innerText = 0;
+        }
 
-            // eu pornesc polling-ul la fiecare 300 ms
-            pollDistance();
-            setInterval(pollDistance, 300);
-        });
-
-        // ========== joystick-ul tău (nemodificat logic) ==========
         var width, height, radius, x_orig, y_orig;
+
         function resize() {
             width = document.querySelector('.panel:last-of-type').clientWidth || window.innerWidth;
             radius = 100;
-            height = radius * 5;
+            height = radius * 5; // Păstrez proporția ta originală
             ctx.canvas.width = width;
             ctx.canvas.height = height;
             background();
@@ -102,9 +99,9 @@
             ctx.fill();
         }
 
-        function joystick(width, height) {
+        function joystick(x, y) {
             ctx.beginPath();
-            ctx.arc(width, height, radius / 2, 0, Math.PI * 2, true);
+            ctx.arc(x, y, radius / 2, 0, Math.PI * 2, true);
             ctx.fillStyle = '#F08080';
             ctx.fill();
             ctx.strokeStyle = '#F6ABAB';
@@ -116,10 +113,17 @@
         let paint = false;
 
         function getPosition(event) {
-            var mouse_x = event?.clientX || (event?.touches && event.touches[0]?.clientX) || coord.x;
-            var mouse_y = event?.clientY || (event?.touches && event.touches[0]?.clientY) || coord.y;
-            coord.x = mouse_x - canvas.getBoundingClientRect().left;
-            coord.y = mouse_y - canvas.getBoundingClientRect().top;
+            if (!event) return;
+
+            // Suportă atât mouse cât și touch
+            var mouse_x = event.clientX || (event.touches && event.touches[0] ? event.touches[0].clientX : undefined);
+            var mouse_y = event.clientY || (event.touches && event.touches[0] ? event.touches[0].clientY : undefined);
+
+            // Actualizăm coordonatele doar dacă avem input valid
+            if (mouse_x !== undefined && mouse_y !== undefined) {
+                coord.x = mouse_x - canvas.getBoundingClientRect().left;
+                coord.y = mouse_y - canvas.getBoundingClientRect().top;
+            }
         }
 
         function is_it_in_the_circle() {
@@ -128,13 +132,20 @@
         }
 
         function startDrawing(event) {
+            // Blochează scroll-ul pe mobil la atingere
+            if (event.type === 'touchstart') {
+                event.preventDefault();
+            }
+
             paint = true;
             getPosition(event);
+
             if (is_it_in_the_circle()) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 background();
                 joystick(coord.x, coord.y);
-                Draw();
+                // Apelăm Draw pentru a trimite datele imediat, pasând evenimentul
+                Draw(event);
             }
         }
 
@@ -143,16 +154,27 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             background();
             joystick(width / 2, height / 3);
-            document.getElementById("x_coordinate").innerText = 0;
-            document.getElementById("y_coordinate").innerText = 0;
-            document.getElementById("speed").innerText = 0;
-            document.getElementById("angle").innerText = 0;
+            resetTelemetry();
+
+            // Verificăm dacă funcția send există înainte de a o apela
+            if (typeof send === "function") {
+                send(0, 0, 0, 0);
+            }
         }
 
         function Draw(event) {
             if (paint) {
+                // Blochează scroll-ul pe mobil la mișcare
+                if (event.type === 'touchmove') {
+                    event.preventDefault();
+                }
+
+                // [IMPORTANT] Actualizăm poziția ÎNAINTE de calcule
+                getPosition(event);
+
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 background();
+
                 var angle_in_degrees, x, y, speed;
                 var angle = Math.atan2((coord.y - y_orig), (coord.x - x_orig));
 
@@ -172,24 +194,28 @@
                     joystick(x, y);
                 }
 
-                getPosition(event);
-
+                // Calcul viteză (max 100%)
                 var speed = Math.round(100 * Math.sqrt(Math.pow(x - x_orig, 2) + Math.pow(y - y_orig, 2)) / radius);
+                if (speed > 100) speed = 100;
+
                 var x_relative = Math.round(x - x_orig);
                 var y_relative = Math.round(y - y_orig);
 
+                // Actualizare UI
                 document.getElementById("x_coordinate").innerText = x_relative;
                 document.getElementById("y_coordinate").innerText = y_relative;
                 document.getElementById("speed").innerText = speed;
                 document.getElementById("angle").innerText = angle_in_degrees;
 
-                // eu trimit la server ca înainte
-                send(x_relative, y_relative, speed, angle_in_degrees);
+                // Trimitere date către server (Raspberry Pi)
+                if (typeof send === "function") {
+                    send(x_relative, y_relative, speed, angle_in_degrees);
+                }
             }
         }
     </script>
 
-    <script src="static/app.js"></script>
+
 </body>
 
 </html>

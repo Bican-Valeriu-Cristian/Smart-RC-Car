@@ -74,8 +74,13 @@ h1 {
 /* textul mic de status de sub video */
 #status {
     text-align: center;
-    margin: 8px 0 0;
-    color: #cfcfcf;
+    margin: 10px 0 0;
+    color: #00ff00;
+    /* Verde aprins, stil "hacker" */
+    font-size: 24px;
+    /* Text mai mare */
+    font-weight: bold;
+    font-family: monospace;
 }
 
 /* titlul mic de deasupra joystickului */

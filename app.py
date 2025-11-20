@@ -1,75 +1,80 @@
 from flask import Flask, Response, request, jsonify
 import cv2
 from picamera2 import Picamera2
-import motor, sensor  # eu folosesc motoarele și senzorul
+import motor, sensor  #  folosesc motoarele și senzorul
 
 app = Flask(__name__)
 
 # ------------------- SETĂRI CONTROL -------------------
-# eu țin aceleași constante ca să fie previzibil
+#  țin aceleași constante ca să fie previzibil
 RADIUS = 100.0    # egal cu radius-ul din joystick (frontend)
-DEADZONE = 0.08   # eu ignor micile variații din centru
+DEADZONE = 0.08   #  ignor micile variații din centru
 MAX_OUT = 100     # ieșirea maximă pentru motoare (%)
 TURN_K = 1.0      # factor de viraj (1 = normal)
 
 def clamp(v, lo, hi):
-    # eu limitez o valoare între [lo, hi]
+    #  limitez o valoare între [lo, hi]
     return max(lo, min(hi, v))
 
 def apply_deadzone(v, dz=DEADZONE):
-    # eu fac zona moartă ca să nu tremure pe centru
+    #  fac zona moartă ca să nu tremure pe centru
     return 0.0 if abs(v) < dz else v
 # ------------------------------------------------------
 
 
 # -------------------- CAMERA --------------------------
-# eu pornesc camera și trimit MJPEG către browser
+# pornesc camera și trimit MJPEG către browser
+              
 cam = Picamera2()
-cam.configure(cam.create_video_configuration(main={"size": (640, 480)}))
+config = cam.create_video_configuration(
+    main={
+        "size": (640, 360),
+        "format": "BGR888" 
+    }
+)
+cam.configure(config)
 cam.start()
 
 def mjpeg():
-    # eu captez cadre, le encodez JPG și le trimit ca stream
     while True:
         frame = cam.capture_array()
-        # eu scriu un mic text pe video ca să văd că merge
-        cv2.putText(frame, "SmartCar", (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        ok, jpg = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+        ok, jpg = cv2.imencode('.jpg', frame, encode_param)
+        
         if ok:
             yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' +
                    jpg.tobytes() + b'\r\n')
-# ------------------------------------------------------
-
 
 # -------------------- RUTE SERVER ---------------------
 @app.route('/')
 def index():
-    # eu servesc pagina principală
+    # servesc pagina principală
     with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 @app.route('/video')
 def video():
-    # eu servesc fluxul video în format MJPEG
+    #  servesc fluxul video în format MJPEG
     return Response(mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/distance')
-def distance():
-    # eu doar măsor și întorc distanța (NU opresc mașina)
-    cm = sensor.distance_cm()
-    return jsonify(ok=(cm is not None), cm=(cm if cm is not None else 0.0))
+def get_distance():
+    cm = sensor.distance()
+    return jsonify(cm=cm)
+
 
 @app.route('/drive', methods=['POST'])
 def drive():
-    # eu primesc datele de la joystick (x, y, speed, angle)
+    #  primesc datele de la joystick (x, y, speed, angle)
     d = request.get_json(silent=True) or {}
 
-    # eu extrag valorile ca întregi
+    #  extrag valorile ca întregi
     x = int(d.get('x', 0))
     y = int(d.get('y', 0))
     speed = int(d.get('speed', 0))  # cât de tare împing joystickul
-    # angle îl primesc, dar nu-l folosesc aici
+    
+   # angle = int(d.get('angle', 0))# angle îl primesc, dar nu-l folosesc aici
 
     # 1) normalizare în [-1, 1]; invers y ca să fie sus = înainte
     nx = clamp(x / RADIUS, -1, 1)
@@ -89,17 +94,30 @@ def drive():
     left  = int(left_u  * s * MAX_OUT)
     right = int(right_u * s * MAX_OUT)
 
-    # 5) eu trimit efectiv la motoare (nu opresc pentru obstacole)
+    # Citim distanța actuală
+    dist = sensor.distance()
+
+    # 2. Verificăm condiția de stop
+    # Dacă distanța e validă (mai mare ca 0) 
+    # ȘI e mai mică de 20cm 
+    # ȘI utilizatorul vrea să meargă în față (speed > 0)
+    if 0 < dist < 20 and ny > 0:
+        left = 0
+        right = 0
+        print("STOP! Obstacol detectat.")
+
+    # --------------------------------
+    # 5)  trimit efectiv la motoare 
     motor.set_left(left)
     motor.set_right(right)
 
-    # eu trimit înapoi valori pentru debug în UI
+    # trimit înapoi valori pentru debug în UI
     return jsonify(ok=True, left=left, right=right, x=x, y=y, speed=speed)
 # ------------------------------------------------------
 
 
 # -------------------- MAIN ----------------------------
 if __name__ == '__main__':
-    # eu pornesc serverul Flask pe toate interfețele
-    app.run(host='0.0.0.0', port=8000, threaded=True)
+    # pornesc serverul Flask pe toate interfețele
+    app.run(host='0.0.0.0', port=8000, threaded=True, debug=False, use_reloader=False)
 # ------------------------------------------------------
