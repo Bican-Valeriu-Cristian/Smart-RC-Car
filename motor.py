@@ -32,13 +32,13 @@ PWMB2  = 32       # dreapta spate-> PWMB
 # ---- Setari PWM ----
 PWM_FREQ = 1000   # ~1 kHz (stabil pentru RPi.GPIO PWM software)
 
-# 1) Directii LOW (evita glitch-uri la boot)
+# Directii LOW (evita glitch-uri la boot)
 for pin in [AIN1_FL, AIN2_FL, BIN1_FR, BIN2_FR,
             AIN1_RL, AIN2_RL, BIN1_RR, BIN2_RR]:
     GPIO.setup(pin, GPIO.OUT)
     GPIO.output(pin, GPIO.LOW)
 
-# 2) PWM: start(0)
+# PWM: start(0)
 for pin in [PWMA1, PWMB1, PWMA2, PWMB2]:
     GPIO.setup(pin, GPIO.OUT)
 
@@ -50,7 +50,7 @@ pwm_rr = GPIO.PWM(PWMB2, PWM_FREQ)  # dreapta spate
 for p in (pwm_fl, pwm_fr, pwm_rl, pwm_rr):
     p.start(0)
 
-# 3) Scoate driverele din standby abia acum
+# Scoate driverele din standby abia acum
 for stby in (STBY1, STBY2):
     GPIO.setup(stby, GPIO.OUT)
     GPIO.output(stby, GPIO.HIGH)
