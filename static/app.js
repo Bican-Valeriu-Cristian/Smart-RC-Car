@@ -32,4 +32,4 @@ setInterval(() => {
             }
         })
         .catch(e => console.log("Eroare senzor")); // Ignorăm erorile silențios
-}, 250);
+}, 1250);

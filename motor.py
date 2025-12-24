@@ -1,62 +1,75 @@
 # motors.py — 2x TB6612FNG 
-# comanda: -100..100 (negativ = inapoi, pozitiv = inainte)
+# ADAPTAT PENTRU RASPBERRY PI 5 (folosind gpiozero)
+# Variabile curatate (fara _dev)
 
-import RPi.GPIO as GPIO
+from gpiozero import PWMOutputDevice, DigitalOutputDevice
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setwarnings(False)
+# =========================================================
+# 1. DEFINIRE PINI (Sistem BCM pentru Pi 5)
+# =========================================================
+# Am convertit pinii tai fizici (BOARD) in pinii logici (BCM).
 
-# -------- PINI FIZICI (BOARD) --------
-# Driver fata (TB6612 #1)
-STBY1 = 22
+# --- Driver Fata (TB6612 #1) ---
+STBY1_PIN   = 25  # (Era Pin Fizic 22)
 
-AIN1_FL = 16      # front left  -> AIN1
-AIN2_FL = 18      # front left  -> AIN2
-PWMA1  = 12       # stanga fata  -> PWMA
+AIN1_FL_PIN = 23  # (Era Pin Fizic 16)
+AIN2_FL_PIN = 24  # (Era Pin Fizic 18)
+PWMA1_PIN   = 18  # (Era Pin Fizic 12)
 
-BIN1_FR = 15      # front right -> BIN1
-BIN2_FR = 13      # front right -> BIN2
-PWMB1  = 33     # dreapta fata -> PWMB
+BIN1_FR_PIN = 22  # (Era Pin Fizic 15)
+BIN2_FR_PIN = 27  # (Era Pin Fizic 13)
+PWMB1_PIN   = 13  # (Era Pin Fizic 33)
 
-# Driver spate (TB6612 #2)
-STBY2 = 36
+# --- Driver Spate (TB6612 #2) ---
+STBY2_PIN   = 16  # (Era Pin Fizic 36)
 
-AIN1_RL = 40      # rear left    -> AIN1
-AIN2_RL = 37      # rear left    -> AIN2
-PWMA2  = 35       # stanga spate -> PWMA
+AIN1_RL_PIN = 21  # (Era Pin Fizic 40)
+AIN2_RL_PIN = 26  # (Era Pin Fizic 37)
+PWMA2_PIN   = 19  # (Era Pin Fizic 35)
 
-BIN1_RR = 31      # rear right   -> BIN1
-BIN2_RR = 24      # rear right   -> BIN2
-PWMB2  = 32       # dreapta spate-> PWMB
+BIN1_RR_PIN = 6   # (Era Pin Fizic 31)
+BIN2_RR_PIN = 8   # (Era Pin Fizic 24)
+PWMB2_PIN   = 12  # (Era Pin Fizic 32)
 
-# ---- Setari PWM ----
-PWM_FREQ = 1000   # ~1 kHz (stabil pentru RPi.GPIO PWM software)
-
-# Directii LOW (evita glitch-uri la boot)
-for pin in [AIN1_FL, AIN2_FL, BIN1_FR, BIN2_FR,
-            AIN1_RL, AIN2_RL, BIN1_RR, BIN2_RR]:
-    GPIO.setup(pin, GPIO.OUT)
-    GPIO.output(pin, GPIO.LOW)
-
-# PWM: start(0)
-for pin in [PWMA1, PWMB1, PWMA2, PWMB2]:
-    GPIO.setup(pin, GPIO.OUT)
-
-pwm_fl = GPIO.PWM(PWMA1, PWM_FREQ)  # stanga fata
-pwm_fr = GPIO.PWM(PWMB1, PWM_FREQ)  # dreapta fata
-pwm_rl = GPIO.PWM(PWMA2, PWM_FREQ)  # stanga spate
-pwm_rr = GPIO.PWM(PWMB2, PWM_FREQ)  # dreapta spate
-
-for p in (pwm_fl, pwm_fr, pwm_rl, pwm_rr):
-    p.start(0)
-
-# Scoate driverele din standby abia acum
-for stby in (STBY1, STBY2):
-    GPIO.setup(stby, GPIO.OUT)
-    GPIO.output(stby, GPIO.HIGH)
+# Frecventa PWM
+PWM_FREQ = 1000
 
 
-# -------------------- FUNCTII --------------------
+# =========================================================
+# 2. INITIALIZARE DISPOZITIVE
+# =========================================================
+
+# --- Driver Fata ---
+stby1 = DigitalOutputDevice(STBY1_PIN, initial_value=True)
+
+# Stanga Fata
+ain1_fl = DigitalOutputDevice(AIN1_FL_PIN)
+ain2_fl = DigitalOutputDevice(AIN2_FL_PIN)
+pwm_fl  = PWMOutputDevice(PWMA1_PIN, frequency=PWM_FREQ)
+
+# Dreapta Fata
+bin1_fr = DigitalOutputDevice(BIN1_FR_PIN)
+bin2_fr = DigitalOutputDevice(BIN2_FR_PIN)
+pwm_fr  = PWMOutputDevice(PWMB1_PIN, frequency=PWM_FREQ)
+
+# --- Driver Spate ---
+stby2 = DigitalOutputDevice(STBY2_PIN, initial_value=True)
+
+# Stanga Spate
+ain1_rl = DigitalOutputDevice(AIN1_RL_PIN)
+ain2_rl = DigitalOutputDevice(AIN2_RL_PIN)
+pwm_rl  = PWMOutputDevice(PWMA2_PIN, frequency=PWM_FREQ)
+
+# Dreapta Spate
+bin1_rr = DigitalOutputDevice(BIN1_RR_PIN)
+bin2_rr = DigitalOutputDevice(BIN2_RR_PIN)
+pwm_rr  = PWMOutputDevice(PWMB2_PIN, frequency=PWM_FREQ)
+
+
+# =========================================================
+# 3. FUNCTII LOGICE
+# =========================================================
+
 def _clamp(v):
     if v > 100: return 100
     if v < -100: return -100
@@ -64,32 +77,41 @@ def _clamp(v):
 
 
 def _set_motor(in1, in2, pwm, value):
+    """
+    Controleaza directia si viteza unui singur motor.
+    """
     v = _clamp(value)
+    
+    # GPIO Zero lucreaza cu valori 0.0 -> 1.0
+    speed = abs(v) / 100.0
+
     if v == 0:
-        # COAST la 0: ambele LOW, PWM 0
-        GPIO.output(in1, GPIO.LOW)
-        GPIO.output(in2, GPIO.LOW)
-        pwm.ChangeDutyCycle(0)
+        # COAST: totul oprit
+        in1.off()
+        in2.off()
+        pwm.value = 0
     elif v > 0:
-        GPIO.output(in1, GPIO.HIGH)
-        GPIO.output(in2, GPIO.LOW)
-        pwm.ChangeDutyCycle(v)
-    else:  # v < 0 // mers invers
-        GPIO.output(in1, GPIO.LOW)
-        GPIO.output(in2, GPIO.HIGH)
-        pwm.ChangeDutyCycle(-v)
+        # INAINTE
+        in1.on()
+        in2.off()
+        pwm.value = speed
+    else: 
+        # INAPOI (v < 0)
+        in1.off()
+        in2.on()
+        pwm.value = speed
 
 
 def set_left(value):
-    # stanga fata + stanga spate 
-    _set_motor(AIN1_FL, AIN2_FL, pwm_fl, value)
-    _set_motor(AIN1_RL, AIN2_RL, pwm_rl, -value)
+    # Controlam motoarele de pe stanga
+    _set_motor(ain1_fl, ain2_fl, pwm_fl, value)
+    _set_motor(ain1_rl, ain2_rl, pwm_rl, -value)
 
 
 def set_right(value):
-    # dreapta fata + dreapta spate 
-    _set_motor(BIN1_FR, BIN2_FR, pwm_fr, value)
-    _set_motor(BIN1_RR, BIN2_RR, pwm_rr, -value)
+    # Controlam motoarele de pe dreapta
+    _set_motor(bin1_fr, bin2_fr, pwm_fr, value)
+    _set_motor(bin1_rr, bin2_rr, pwm_rr, -value)
 
 
 def stop():
@@ -98,10 +120,13 @@ def stop():
 
 
 def cleanup():
-    # opresc tot
+    # Functie de curatare
     stop()
-    for p in (pwm_fl, pwm_fr, pwm_rl, pwm_rr):
-        p.stop()
-    GPIO.output(STBY1, GPIO.LOW)
-    GPIO.output(STBY2, GPIO.LOW)
-    GPIO.cleanup()
+    stby1.off()
+    stby2.off()
+    
+    # Inchidem conexiunile
+    pwm_fl.close()
+    pwm_fr.close()
+    pwm_rl.close()
+    pwm_rr.close()
