@@ -1,47 +1,31 @@
 from flask import Flask, Response, request, jsonify
 import motor
-import sensor  # Acesta va importa noul fisier sensor.py "clean"
+import sensor
+import env_sensors  # <--- IMPORTUL NOSTRU
 import threading
 import time
-
-
-# IMPORT CAMERA
 from camera import mjpeg, cleanup as camera_cleanup
 
 app = Flask(__name__)
 
-# ------------------- SETĂRI -------------------
-RADIUS = 100.0
-MAX_OUT = 100
-TURN_K = 1.0
+# --- CONSTANTE SIGURANȚĂ ---
 SAFE_DISTANCE_CM = 20.0
-
 current_ny = 0.0
+TURN_K = 1.0
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
-
-# -------------------- (WATCHDOG) --------------------
-# Rulează în fundal și oprește robotul dacă se apropie de zid
+# --- WATCHDOG SIGURANȚĂ (MOTOR) ---
 def safety_watchdog():
     global current_ny
-
-    print("Watchdog de siguranță activat...")
-    
     while True:
-        # Aici folosim noua funcție din sensor.py
         dist = sensor.get_distance()
-        
-        # Dacă avem o citire validă, suntem sub 20cm și robotul vrea să meargă în față
         if dist > 0 and dist < SAFE_DISTANCE_CM and current_ny > 0:
             print(f"Watchdog: ZID la {dist}cm -> STOP FORTAT")
             motor.stop()
-            # Resetăm comanda ca să nu pornească iar singur
             current_ny = 0 
-
-        time.sleep(0.1)  # Verifică de 10 ori pe secundă
-
+        time.sleep(0.1)
 
 # -------------------- RUTE ---------------------
 @app.route('/')
@@ -52,18 +36,29 @@ def index():
     except FileNotFoundError:
         return "Eroare: Fisierul index.html lipseste!"
 
-
 @app.route('/video')
 def video():
     return Response(mjpeg(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
-@app.route('/distance')
-def route_get_distance():
-    # Returnează distanța curentă către interfața web (pentru afișare)
-    return jsonify(cm=sensor.get_distance())
-
+# --- RUTĂ NOUĂ TELEMETRIE ---
+@app.route('/telemetry')
+def route_telemetry():
+    # 1. Luăm distanța ultrasonică
+    dist = sensor.get_distance()
+    
+    # 2. Luăm datele de mediu din env_sensors.py
+    env_data = env_sensors.get_data()
+    
+    # 3. Le combinăm
+    response = {
+        "distance_cm": dist,
+        "gas_volts": env_data["gas_volts"],
+        "gas_alert": env_data["gas_alert"],
+        "temp": env_data["temp"],
+        "hum": env_data["hum"]
+    }
+    return jsonify(response)
 
 @app.route('/drive', methods=['POST'])
 def drive():
@@ -76,9 +71,9 @@ def drive():
 
     nx = clamp(x / 100, -1, 1)
     ny = clamp(-y / 100, -1, 1)
+    current_ny = ny 
 
-    current_ny = ny  # Actualizăm variabila globală pentru watchdog
-
+    # Logică viraj
     turn = nx * TURN_K
     left_u = clamp(ny + turn, -1, 1)
     right_u = clamp(ny - turn, -1, 1)
@@ -86,30 +81,29 @@ def drive():
     left = int(left_u * speed)
     right = int(right_u * speed)
 
-    # --- VERIFICARE SIGURANȚĂ ȘI ÎN RUTA DE DRIVE ---
-    # Citim distanța actuală
+    # Verificare siguranță directă
     dist = sensor.get_distance()
-
-    # Dacă distanța e critică și utilizatorul vrea să meargă în față (ny > 0)
     if 0 < dist < SAFE_DISTANCE_CM and ny > 0:
         left = 0
         right = 0
         current_ny = 0
-        print(f"Drive refuzat! Obstacol la {dist} cm.")
+        # print("Refuz drive: obstacol")
 
     motor.set_left(left)
     motor.set_right(right)
 
-    return jsonify(ok=True, left=left, right=right)
-
+    return jsonify(ok=True)
 
 if __name__ == '__main__':
     try:
-        # Pornim thread-ul de siguranță
+        # 1. Thread Siguranță Distanță
         t = threading.Thread(target=safety_watchdog, daemon=True)
         t.start()
 
-        # Pornim serverul web
+        # 2. Thread Senzori Mediu (Gaz/Temp)
+        env_sensors.start_monitoring()
+
+        print("Server Web Pornit...")
         app.run(host='0.0.0.0', port=8000, threaded=True, debug=False)
     
     except KeyboardInterrupt:
@@ -119,4 +113,5 @@ if __name__ == '__main__':
         print("Curățare resurse...")
         motor.cleanup()
         camera_cleanup()
-        sensor.close() # Închidem și senzorul corect
+        sensor.close()
+        env_sensors.cleanup()

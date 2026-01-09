@@ -1,125 +1,267 @@
 :root {
-    --bg: #111;
-    --fg: #fff;
-    --muted: #888;
-    --card: #151515;
-    --border: #333;
+    --bg-dark: #0f0c29;
+    --bg-gradient: linear-gradient(to right, #24243e, #302b63, #0f0c29);
+    --glass-panel: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --neon-green: #00ffcc;
+    --neon-red: #ff0055;
+    --text-main: #ffffff;
+    --text-muted: #a0a0a0;
 }
 
-/* pun box-sizing pentru toate elementele ca sa fie mai usor de controlat dimensiunile */
 * {
     box-sizing: border-box;
 }
 
-html,
 body {
-    height: 100%;
     margin: 0;
+    height: 100vh;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-gradient);
+    /* Fundal Gradient */
+    color: var(--text-main);
+    overflow: hidden;
+    /* Fără scrollbars */
 }
 
-/* stilul de baza al paginii, fundal inchis si text alb */
-body {
-    background: var(--bg);
-    color: var(--fg);
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
-    line-height: 1.4;
-}
-
-/* titlul principal din partea de sus */
 h1 {
-    margin: 14px 0;
     text-align: center;
+    margin: 15px 0;
+    font-weight: 300;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+    /* Glow Text */
+    font-size: 1.8rem;
 }
 
-/* aici fac layout-ul in doua coloane: video in stanga, joystick in dreapta */
 .page {
     display: grid;
     grid-template-columns: 1.6fr 1fr;
-    /* video mai lat, joystick mai mic */
-    gap: 16px;
-    padding: 16px;
-    max-width: 1400px;
+    /* Video mare stanga, Dashboard dreapta */
+    gap: 20px;
+    padding: 20px;
+    max-width: 1600px;
     margin: 0 auto;
+    height: calc(100vh - 80px);
 }
 
-/* fiecare sectiune are un fundal inchis si colturi rotunjite, ca un card */
+/* --- EFECTUL DE STICLĂ (GLASSMORPHISM) --- */
 .panel {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    min-height: 200px;
+    background: var(--glass-panel);
+    backdrop-filter: blur(12px);
+    /* Încețoșare fundal */
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    padding: 15px;
+    transition: transform 0.3s ease;
+    overflow: hidden;
 }
 
-/* aici e zona cu video-ul de la camera */
+/* --- VIDEO & HUD --- */
 .video-wrap {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    position: relative;
+    padding: 0;
 }
 
-/* imaginea video live */
-.video-wrap img {
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.video-container img {
     width: 100%;
     height: auto;
-    max-height: 70vh;
-    /* sa nu iasa din ecran */
+    max-height: 85vh;
+    /* Să nu iasă din ecran pe verticală */
     object-fit: contain;
-    border: 2px solid var(--border);
-    border-radius: 10px;
-    display: block;
+    /* Păstrează proporția imaginii */
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
-/* textul mic de status de sub video */
-#status {
-    text-align: center;
-    margin: 10px 0 0;
-    color: #00ff00;
-    /* Verde aprins, stil "hacker" */
-    font-size: 24px;
-    /* Text mai mare */
+/* HUD Overlay (Stratul deasupra video) */
+#hud-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Elemente decorative colțuri (Stil Vizor) */
+#hud-overlay::before,
+#hud-overlay::after {
+    content: '';
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: var(--neon-green);
+    border-style: solid;
+    transition: all 0.3s ease;
+}
+
+#hud-overlay::before {
+    top: 10px;
+    left: 10px;
+    border-width: 2px 0 0 2px;
+}
+
+#hud-overlay::after {
+    bottom: 10px;
+    right: 10px;
+    border-width: 0 2px 2px 0;
+}
+
+/* Distanța (Jos Centru) */
+#hud-distance {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 20, 0, 0.8);
+    color: var(--neon-green);
+    padding: 8px 25px;
+    border: 1px solid var(--neon-green);
+    border-radius: 50px;
+    font-family: 'Courier New', monospace;
     font-weight: bold;
-    font-family: monospace;
+    font-size: 1.2rem;
+    box-shadow: 0 0 15px rgba(0, 255, 204, 0.3);
 }
 
-/* titlul mic de deasupra joystickului */
-.joy-header {
-    text-align: center;
-    color: var(--muted);
-    margin: 0 0 8px 0;
+/* --- ALERTA DE PERICOL (AICI ERA PROBLEMA) --- */
+#hud-alert {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* Centrare perfectă */
+
+    background: rgba(0, 0, 0, 0.9);
+    color: var(--neon-red);
+    border: 4px solid var(--neon-red);
+    padding: 30px 50px;
+
+    font-size: 3rem;
+    /* Text Uriaș */
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+    white-space: nowrap;
+
+    box-shadow: 0 0 50px var(--neon-red), inset 0 0 20px var(--neon-red);
+    text-shadow: 0 0 20px var(--neon-red);
+    z-index: 100;
+
+    display: none;
+    /* Ascuns implicit */
+    animation: alert-pulse 0.6s infinite alternate;
 }
 
-/* aici afisez X, Y, viteza si unghiul joystickului */
-.telemetry {
-    text-align: center;
-    color: var(--muted);
-    font-size: 18px;
-    margin-bottom: 8px;
-}
-
-/* asta e canvas-ul unde desenez joystickul in JS */
-#canvas {
-    display: block;
-    width: 100%;
-    height: auto;
-    /* inaltimea o setez din JS */
-    border-radius: 12px;
-    touch-action: none;
-    /* pe telefoane, opresc scroll-ul cand misc joystickul */
-    background: transparent;
-    /* fundalul e desenat din codul JS */
-}
-
-/* aici fac pagina sa arate bine si pe ecrane mici (ex: telefon) */
-@media (max-width: 980px) {
-    .page {
-        grid-template-columns: 1fr;
-        /* devine o singura coloana */
+@keyframes alert-pulse {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
     }
 
-    .video-wrap img {
-        max-height: none;
-        /* las imaginea sa se redimensioneze liber */
+    100% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+}
+
+/* --- DASHBOARD DREAPTA --- */
+.dashboard-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    justify-content: space-between;
+}
+
+.sensor-box {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sensor-box h3 {
+    margin: 5px 0 10px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Forțăm canvas-urile să fie vizibile */
+canvas {
+    display: block;
+    width: 100% !important;
+    border-radius: 16px;
+}
+
+/* --- JOYSTICK --- */
+.joystick-box {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    min-height: 0px;
+    /* Destul loc pentru joystick mare */
+}
+
+.telemetry {
+    position: absolute;
+    top: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    font-size: 0.8rem;
+    font-family: monospace;
+    color: var(--neon-green);
+    background: rgba(0, 0, 0, 0);
+    padding: 5px;
+    border-radius: 4px;
+}
+
+/* --- RESPONSIVE (Mobil/Tabletă) --- */
+@media (max-width: 1000px) {
+    .page {
+        grid-template-columns: 1fr;
+        /* O singură coloană */
+        height: auto;
+        overflow-y: auto;
+    }
+
+    body {
+        overflow: auto;
+        height: auto;
+    }
+
+    .joystick-box {
+        min-height: 350px;
+    }
+
+    #hud-alert {
+        font-size: 2rem;
+        /* Mai mic pe telefon, dar tot mare */
+        padding: 20px;
     }
 }
