@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('touchcancel', stopDrawing);
         document.addEventListener('touchmove', Draw, { passive: false });
 
-        canvas.addEventListener('mouseleave', stopDrawing);
+        //canvas.addEventListener('mouseleave', stopDrawing);
         window.addEventListener('blur', stopDrawing);
 
         setTimeout(resize, 100);
