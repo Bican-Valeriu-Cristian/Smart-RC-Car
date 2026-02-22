@@ -1,6 +1,4 @@
-// ==========================================
-// 1. LOGICA JOYSTICK (DESIGN VECHI + COMPACT)
-// ==========================================
+// 1. LOGICA JOYSTICK
 var canvas, ctx, width, height, radius, x_orig, y_orig;
 let coord = { x: 0, y: 0 };
 let paint = false;
@@ -28,22 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
     initChartsSafe();
 });
 
-// --- FUNCTIA RESIZE MODIFICATA PENTRU LAPTOP ---
+// FUNCTIA RESIZE MODIFICATA PENTRU LAPTOP 
 function resize() {
     const parent = document.querySelector('.joystick-box');
     if (parent) {
         width = parent.clientWidth - 10;
-
-        // --- MODIFICARE CRITICĂ PENTRU MĂRIME ---
-        // Împărțim la 6 pentru un cerc micuț
         radius = width / 12;
 
-        // Limite de siguranță (să nu fie nici prea mic, nici prea mare)
         if (radius < 35) radius = 35;
-        if (radius > 70) radius = 70; // Maxim 70px rază
+        if (radius > 70) radius = 70;
 
-        // Înălțimea totală a canvasului redusă drastic
-        height = radius * 5.3; // Era * 4 sau * 5
+        // Înălțimea canvasului
+        height = radius * 5.3;
 
         ctx.canvas.width = width;
         ctx.canvas.height = height;
@@ -53,7 +47,7 @@ function resize() {
     }
 }
 
-// Design Vechi: Fundal
+// Cerc exterior
 function background() {
     x_orig = width / 2;
     y_orig = height / 2;
@@ -63,7 +57,7 @@ function background() {
     ctx.fill();
 }
 
-// Design Vechi: Buton
+// Cerc interior (joystick)
 function joystick(x, y) {
     ctx.beginPath();
     ctx.arc(x, y, radius * 0.4, 0, Math.PI * 2, true);
@@ -73,7 +67,7 @@ function joystick(x, y) {
     ctx.lineWidth = 4;
     ctx.stroke();
 }
-
+// Obține coordonatele mouse-ului sau ale atingerii
 function getPosition(event) {
     if (!event) return;
     var mouse_x = event.clientX || (event.touches && event.touches[0] ? event.touches[0].clientX : undefined);
@@ -84,12 +78,12 @@ function getPosition(event) {
         coord.y = mouse_y - rect.top;
     }
 }
-
+// Verifică dacă coordonatele sunt în interiorul cercului exterior
 function is_it_in_the_circle() {
     var current_radius = Math.sqrt(Math.pow(coord.x - x_orig, 2) + Math.pow(coord.y - y_orig, 2));
     return radius >= current_radius;
 }
-
+// Începe desenarea joystick-ului
 function startDrawing(event) {
     if (event.target !== canvas) return;
     if (event.type === 'touchstart') event.preventDefault();
@@ -102,7 +96,7 @@ function startDrawing(event) {
         Draw(event);
     }
 }
-
+// Oprește desenarea și resetează joystick-ul
 function stopDrawing() {
     paint = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -111,7 +105,7 @@ function stopDrawing() {
     updateUI(0, 0, 0);
     send(0, 0, 0, 0);
 }
-
+// Desenează joystick-ul în funcție de mișcarea mouse-ului sau a atingerii
 function Draw(event) {
     if (paint) {
         if (event.type === 'touchmove') event.preventDefault();
@@ -139,7 +133,7 @@ function Draw(event) {
         }
 
         var raw_x = x - x_orig;
-        var raw_y = y - y_orig;
+        var raw_y = y_orig - y;
         var x_percent = Math.round((raw_x / radius) * 100);
         var y_percent = Math.round((raw_y / radius) * 100);
 
@@ -155,7 +149,7 @@ function Draw(event) {
         send(x_percent, y_percent, speed, angle_in_degrees);
     }
 }
-
+// Actualizează valorile afișate în UI
 function updateUI(x, y, s) {
     const elX = document.getElementById("x_coordinate");
     const elY = document.getElementById("y_coordinate");
@@ -165,11 +159,10 @@ function updateUI(x, y, s) {
     if (elS) elS.innerText = s;
 }
 
-// ==========================================
-// 2. CONFIGURARE DASHBOARD (GRAFICE DUBLE)
-// ==========================================
+
+// 2. CONFIGURARE DASHBOARD - GAUGE GAZ
+
 var gasGauge = null;
-var tempChart = null;
 
 function initChartsSafe() {
     try {
@@ -182,9 +175,9 @@ function initChartsSafe() {
                 colorStart: '#6FADCF', colorStop: '#8FC0DA', strokeColor: '#222',
                 generateGradient: true, highDpiSupport: true,
                 staticZones: [
-                    { strokeStyle: "#30B32D", min: 0, max: 1.5 },
-                    { strokeStyle: "#FFDD00", min: 1.5, max: 2.5 },
-                    { strokeStyle: "#F03E3E", min: 2.5, max: 5.0 }
+                    { strokeStyle: "#30B32D", min: 0, max: 2 },
+                    { strokeStyle: "#FFDD00", min: 2, max: 3 },
+                    { strokeStyle: "#F03E3E", min: 3, max: 5.0 }
                 ],
             };
             var target = document.getElementById('gasGauge');
@@ -197,93 +190,17 @@ function initChartsSafe() {
                 gasGauge.set(0);
             }
         }
-
-        // --- CHART TEMPERATURA + UMIDITATE ---
-        if (typeof Chart !== 'undefined') {
-            var ctxElement = document.getElementById('tempChart');
-            if (ctxElement) {
-                var ctxChart = ctxElement.getContext('2d');
-
-                // Gradient Verde (Temp)
-                var gradTemp = ctxChart.createLinearGradient(0, 0, 0, 100);
-                gradTemp.addColorStop(0, 'rgba(0, 255, 0, 0.4)');
-                gradTemp.addColorStop(1, 'rgba(0, 255, 0, 0.0)');
-
-                // Gradient Albastru (Umiditate)
-                var gradHum = ctxChart.createLinearGradient(0, 0, 0, 100);
-                gradHum.addColorStop(0, 'rgba(0, 255, 255, 0.2)');
-                gradHum.addColorStop(1, 'rgba(0, 255, 255, 0.0)');
-
-                tempChart = new Chart(ctxChart, {
-                    type: 'line',
-                    data: {
-                        labels: [],
-                        datasets: [
-                            // DATASET 1: Temperatura (Stanga, Verde)
-                            {
-                                label: 'Temp (°C)',
-                                data: [],
-                                borderColor: '#00ff00',
-                                backgroundColor: gradTemp,
-                                borderWidth: 2,
-                                tension: 0.4,
-                                fill: true,
-                                pointRadius: 0,
-                                yAxisID: 'y', // Axa stanga
-                            },
-                            // DATASET 2: Umiditate (Dreapta, Albastru Cyan)
-                            {
-                                label: 'Umiditate (%)',
-                                data: [],
-                                borderColor: '#00ffff', // Cyan Neon
-                                backgroundColor: gradHum,
-                                borderWidth: 1, // Linie mai subtire
-                                tension: 0.4,
-                                fill: true,
-                                pointRadius: 0,
-                                yAxisID: 'y1', // Axa dreapta
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } }, // Ascundem legenda ca sa fie curat
-                        scales: {
-                            x: { display: false },
-                            // AXA STANGA (Temp)
-                            y: {
-                                position: 'left',
-                                grid: { color: 'rgba(255,255,255,0.1)' },
-                                ticks: { color: '#00ff00', font: { size: 10 } } // Scris Verde
-                            },
-                            // AXA DREAPTA (Umiditate)
-                            y1: {
-                                position: 'right',
-                                grid: { drawOnChartArea: false }, // Fara grilaj dublu
-                                ticks: { color: '#00ffff', font: { size: 10 } }, // Scris Albastru
-                                min: 0,
-                                max: 100 // Umiditatea e mereu 0-100%
-                            }
-                        },
-                        animation: false
-                    }
-                });
-            }
-        }
     } catch (e) {
         console.error("Eroare initializare grafice:", e);
     }
 }
 
-// ==========================================
 // 3. COMUNICARE SERVER 
-// ==========================================
 setInterval(() => {
     fetch('/telemetry')
         .then(r => r.json())
         .then(data => {
-            // A. HUD
+            // A. HUD Distanță
             const hudDist = document.getElementById("hud-distance");
             const hudAlert = document.getElementById("hud-alert");
             if (hudDist) {
@@ -315,40 +232,25 @@ setInterval(() => {
                 }
             }
 
-            // C. Chart Temperatura + Umiditate
-            if (tempChart && data.temp > 0) {
-                const now = new Date().toLocaleTimeString();
+            // C. Afișare Temperatură + Umiditate
+            const textTemp = document.getElementById("text-temp");
+            const textHum = document.getElementById("text-hum");
 
-                // Pastram doar ultimele 20 puncte
-                if (tempChart.data.labels.length > 20) {
-                    tempChart.data.labels.shift();
-                    tempChart.data.datasets[0].data.shift(); // Temp
-                    tempChart.data.datasets[1].data.shift(); // Hum
-                }
-
-                // Adaugam datele noi
-                tempChart.data.labels.push(now);
-                tempChart.data.datasets[0].data.push(data.temp); // Linie Verde
-
-                // Verificam daca senzorul trimite umiditate, altfel punem 0
-                const humVal = data.hum ? data.hum : 0;
-                tempChart.data.datasets[1].data.push(humVal); // Linie Albastra
-
-                // Zoom Dinamic doar pe Temp (Stanga)
-                tempChart.options.scales.y.min = Math.floor(data.temp - 3);
-                tempChart.options.scales.y.max = Math.ceil(data.temp + 3);
-
-                // Umiditatea (Dreapta) ramane fixa 0-100
-
-                tempChart.update();
+            if (textTemp && data.temp > 0) {
+                textTemp.innerText = `Temp: ${data.temp} °C`;
+            }
+            if (textHum && data.hum > 0) {
+                textHum.innerText = `Umiditate: ${data.hum} %`;
             }
         })
-        .catch(e => console.log("Așteptare server..."));
+        .catch(e => {
+            console.error("Eroare la preluarea telemetriei:", e);
+        });
 }, 1000);
 
 // -- DRIVE LOGIC --
 let lastDriveTs = 0;
-const DRIVE_INTERVAL_MS = 70;
+const DRIVE_INTERVAL_MS = 100;
 function send(x, y, speed, angle) {
     const now = performance.now();
     if (speed !== 0 && (now - lastDriveTs < DRIVE_INTERVAL_MS)) return;

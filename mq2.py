@@ -2,16 +2,13 @@ import time
 import board
 import busio
 import adafruit_dht
-# Importăm doar clasele esențiale, fără constante complicate
 from adafruit_ads1x15.ads1115 import ADS1115
 from adafruit_ads1x15.analog_in import AnalogIn
 
-# --- DEFINIRE MANUALĂ CONSTANTĂ (HACK PENTRU EROARE) ---
-# P0 este întotdeauna canalul 0. Îl definim noi ca să nu mai căutăm în bibliotecă.
+# P0 este întotdeauna canalul 0.
 P0 = 0 
 
 # --- CONFIGURARE ---
-
 # 1. Configurare I2C
 try:
     i2c = busio.I2C(board.SCL, board.SDA)
@@ -21,16 +18,12 @@ except ValueError:
 
 # 2. Inițializare ADS1115
 try:
-    ads = ADS1115(i2c)
-    
-    # --- MODIFICARE AICI ---
-    # Folosim constanta definită de noi mai sus (sau pur și simplu scriem 0)
-    mq2_analog = AnalogIn(ads, P0)
-    
+    ads = ADS1115(i2c) # Inițializăm ADS1115
+    mq2_analog = AnalogIn(ads, P0) # Creăm canalul de citire pentru MQ-2
     print("ADS1115 (MQ-2) inițializat cu succes.")
+
 except Exception as e:
-    print(f"Eroare la ADS1115: {e}")
-    # Dacă primești eroare de I/O, e de la fire.
+    print(f"Eroare la ADS1115: {e}") # Dacă primești eroare de I/O, e de la fire.
     exit()
 
 # 3. Inițializare DHT11 (Pin GPIO 4)
@@ -40,12 +33,8 @@ try:
 except Exception as e:
     print(f"Eroare la inițializare DHT11: {e}")
 
-print("-" * 50)
-print("Monitorizare activă. Apasă Ctrl+C pentru ieșire.")
-print("-" * 50)
 
 # --- BUCLA DE CITIRE ---
-
 try:
     while True:
         try:
@@ -68,14 +57,13 @@ try:
             if temperatura is not None and umiditate is not None:
                 print(f"Temp: {temperatura:.1f}°C | Umid: {umiditate}%")
             else:
-                print("Temp: Citire...")
+                print("Citire...")
 
             # --- Pasul D: Alertă ---
-            if voltaj > 1.5:
+            if voltaj > 2.5: # Prag de alertă pentru gaz 
                 print("\n!!! ALERTA: GAZ DETECTAT !!!\n")
 
-        except Exception as error:
-            # Dacă apare o eroare critică, ieșim curat
+        except Exception as error: # Dacă apare o eroare critică, ieșim curat
             dht_sensor.exit()
             raise error
 

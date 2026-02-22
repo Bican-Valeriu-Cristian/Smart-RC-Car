@@ -1,61 +1,68 @@
-# yolo_detector.py
 import sys
 import torch
-import cv2
 import numpy as np
 
-# adaugă calea până la repo-ul YOLOv5
-sys.path.append('/home/pi/Desktop/SD_Bux/SmartCar/yolov5')  # ajustează dacă ai alt path
+# Adaugă calea până la repo-ul YOLOv5
+sys.path.append('/home/pi/Desktop/SD_Bux/SmartCar/yolov5')  
 
-# ----------------- ÎNCĂRCARE MODEL -----------------
-# încarcă YOLOv5n (nano) COCO din repo-ul local
-model = torch.hub.load('/home/pi/Desktop/SD_Bux/SmartCar/yolov5', 'yolov5n', source='local')
-model.to('cpu')        # pe Raspberry Pi 4B, CPU
-model.conf = 0.4       # confidence threshold
-model.iou = 0.45
-model.max_det = 50     # maxim detecții per imagine
+# ----------------- ÎNCĂRCARE MODEL 1 (PERSOANE - COCO) -----------------
+model_persoane = torch.hub.load('/home/pi/Desktop/SD_Bux/SmartCar/yolov5', 'yolov5n', source='local')
+model_persoane.to('cpu')        
+model_persoane.conf = 0.4       
+model_persoane.iou = 0.45
+model_persoane.max_det = 5    
 
-names = model.names    # numele claselor COCO
+names_persoane = model_persoane.names    
+allowed_classes = [0]  # 0 = person
 
-# dacă vrei să limitezi clasele:
-# COCO: 0=person, 1=bicycle, 2=car, 3=motorbike, 5=bus, 7=truck etc.
-# allowed_classes = [0, 1, 2, 3, 5, 7]
-allowed_classes = None   # None = toate
+# ----------------- ÎNCĂRCARE MODEL 2 (FOC - CUSTOM) -----------------
+cale_model_foc = '/home/pi/Desktop/SD_Bux/SmartCar/model_foc.pt' 
 
+model_foc = torch.hub.load('/home/pi/Desktop/SD_Bux/SmartCar/yolov5', 'custom', path=cale_model_foc, source='local')
+model_foc.to('cpu')
+model_foc.conf = 0.25   
+model_foc.iou = 0.45
+model_foc.max_det = 5
 
-def detect_objects(img_bgr, img_size=320):
+names_foc = model_foc.names 
+
+def detect_objects(img, img_size=320):
     """
-    Rulează YOLOv5n pe un frame BGR și întoarce:
-      - annotated_img: imaginea cu bounding box-uri desenate
+    Rulează ambele modele YOLOv5 pe un frame și întoarce:
+      - imaginea originală (nemodificată)
       - detections: listă de (label, conf, (x1, y1, x2, y2))
     """
-    # YOLOv5 acceptă direct BGR (face intern conversia)
-    # img_size = 320 sau 416 etc. (multiplu de 32)
-    results = model(img_bgr, size=img_size)
+    
+    # 1. Rulăm frame-ul prin ambele modele
+    results_persoane = model_persoane(img, size=img_size)
+    results_foc = model_foc(img, size=img_size)
 
-    # tensor Nx6: x1, y1, x2, y2, conf, cls
-    det = results.xyxy[0].cpu().numpy()
+    # 2. Extragem tensorii cu rezultate
+    det_persoane = results_persoane.xyxy[0].cpu().numpy()
+    det_foc = results_foc.xyxy[0].cpu().numpy()
 
-    annotated = img_bgr.copy()
     detections = []
 
-    for x1, y1, x2, y2, conf, cls_idx in det:
+    # 3. Procesăm detecțiile pentru PERSOANE
+    for x1, y1, x2, y2, conf, cls_idx in det_persoane:
         cls_idx = int(cls_idx)
-        conf_f = float(conf)
-
+        
+        # Filtrăm să fie doar persoană
         if allowed_classes is not None and cls_idx not in allowed_classes:
             continue
 
-        label = names[cls_idx]
-
+        label = names_persoane[cls_idx]
         x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
+        
+        detections.append((label, float(conf), (x1, y1, x2, y2)))
 
-        # desenăm bounding box
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        text = f"{label} {conf_f:.2f}"
-        cv2.putText(annotated, text, (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    # 4. Procesăm detecțiile pentru FOC
+    for x1, y1, x2, y2, conf, cls_idx in det_foc:
+        cls_idx = int(cls_idx)
+        
+        label = names_foc[cls_idx] # Ia numele din modelul de foc (ex: 'fire')
+        x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
+        
+        detections.append((label, float(conf), (x1, y1, x2, y2)))
 
-        detections.append((label, conf_f, (x1, y1, x2, y2)))
-
-    return annotated, detections
+    return img, detections

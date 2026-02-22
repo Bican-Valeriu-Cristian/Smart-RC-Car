@@ -1,33 +1,30 @@
-# camera.py
 import cv2
 import time
 import threading
 from picamera2 import Picamera2
 from yolo_detector import detect_objects
 
-# --- Configurare Cameră ---
+# CONFIGURAȚII CAMERĂ
 cam = Picamera2()
 config = cam.create_video_configuration(
-    # IMPORTANT: pentru OpenCV trebuie 'RGB888', care în memorie e BGR
     main={"size": (640, 360), "format": "RGB888"},
-    controls = {
-    "AfMode": 2,
-    "AwbEnable": True,
-    "NoiseReductionMode": 1,
-    "ExposureTime": 0,
-    "AnalogueGain": 0
-}
-
+    controls={
+        "AfMode": 2,
+        "AwbEnable": True,
+        "NoiseReductionMode": 1,
+        "ExposureTime": 0,
+        "AnalogueGain": 0
+    }
 )
 cam.configure(config)
 cam.start()
 
-# --- Variabile Globale & Threading ---
+# VARIABILE GLOBALE
 latest_frame_bgr = None
 latest_detections = []
 _running = True
 
-# 🔒 LOCK
+# LOCK
 data_lock = threading.Lock()
 
 YOLO_INTERVAL = 0.1
@@ -35,16 +32,15 @@ YOLO_IMG_SIZE = 320
 JPEG_PARAMS = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
 
 def camera_loop():
-    """Citește continuu de la cameră."""
+    # Capture continuu frame-uri de la cameră
     global latest_frame_bgr
     while _running:
         frame = cam.capture_array()
-        # frame este deja BGR datorită 'RGB888'
         with data_lock:
             latest_frame_bgr = frame
 
 def yolo_loop():
-    """Rulează YOLO periodic."""
+    # Procesează continuu frame-urile cu YOLO
     global latest_detections
     while _running:
         frame_to_process = None
@@ -65,7 +61,7 @@ def yolo_loop():
         
         time.sleep(YOLO_INTERVAL)
 
-# Pornire Thread-uri
+# PORNIM THREAD
 t_cam = threading.Thread(target=camera_loop, daemon=True)
 t_cam.start()
 
@@ -73,7 +69,7 @@ t_yolo = threading.Thread(target=yolo_loop, daemon=True)
 t_yolo.start()
 
 def mjpeg():
-    """Flux MJPEG LIVE."""
+    # FLUX MJPEG PENTRU WEB
     while True:
         frame = None
         detections = []

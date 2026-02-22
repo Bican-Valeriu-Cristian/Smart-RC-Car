@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart RC Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=28">
-    <script src="/static/app.js?v=28"></script>
+    <link rel="stylesheet" href="/static/style.css?v=29">
+    <script src="/static/app.js?v=29"></script>
 
     <script src="/static/chart.min.js"></script>
     <script src="/static/gauge.min.js"></script>
@@ -38,9 +38,10 @@
             </div>
 
             <div class="sensor-box">
-                <h3>Istoric Temperatură</h3>
-                <div class="chart-container">
-                    <canvas id="tempChart"></canvas>
+                <h3>Temperatură si Umiditate</h3>
+                <div class="env-box">
+                    <div id="text-temp">Temp: -- °C</div>
+                    <div id="text-hum">Umiditate: -- %</div>
                 </div>
             </div>
 
