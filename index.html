@@ -5,9 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart RC Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css?v=29">
-    <script src="/static/app.js?v=29"></script>
 
+    <link rel="stylesheet" href="/static/style.css?v=29">
     <script src="/static/chart.min.js"></script>
     <script src="/static/gauge.min.js"></script>
 </head>
@@ -19,7 +18,7 @@
     <div class="page">
         <div class="panel video-wrap">
             <div class="video-container">
-                <img src="/video" alt="Video Feed" id="video-feed">
+                <img src="/video" alt="Video Feed" id="video-feed" style="width: 100%; max-width: 640px; height: auto;">
 
                 <div id="hud-overlay">
                     <div id="hud-distance">DIST: -- cm</div>
@@ -38,10 +37,28 @@
             </div>
 
             <div class="sensor-box">
-                <h3>Temperatură si Umiditate</h3>
+                <h3>Temperatură și Umiditate</h3>
                 <div class="env-box">
                     <div id="text-temp">Temp: -- °C</div>
                     <div id="text-hum">Umiditate: -- %</div>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ccc;">Control Cameră</h4>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button onclick="schimbaMod('normal')"
+                        style="flex: 1; padding: 10px; font-size: 13px; font-weight: bold; cursor: pointer; background-color: #3498db; color: white; border: none; border-radius: 5px;">
+                        📷 Vedere Normală
+                    </button>
+                    <button onclick="schimbaMod('midas')"
+                        style="flex: 1; padding: 10px; font-size: 13px; font-weight: bold; cursor: pointer; background-color: #e67e22; color: white; border: none; border-radius: 5px;">
+                        🔥 Vedere Adâncime
+                    </button>
+                    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+                    <button id="btn-autopilot" onclick="toggleAutoPilot()"
+                        style="width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background-color: #e74c3c; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.3s;">
+                        🤖 AUTO-PILOT: OFF
+                    </button>
                 </div>
             </div>
 
@@ -53,11 +70,45 @@
                 </p>
                 <h3 class="joy-header">Control Manual</h3>
                 <canvas id="canvas" name="game"></canvas>
+
+
             </div>
+
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script>
+        // Script pentru camera
+        function schimbaMod(modulDorit) {
+            fetch('/schimba_mod', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'mod=' + modulDorit
+            }).then(response => {
+                if (response.ok) console.log("Cameră schimbată pe: " + modulDorit);
+            });
+        }
+
+        // Script pentru Autopilot
+        let isAutoPilotOn = false;
+        function toggleAutoPilot() {
+            fetch('/toggle_auto', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    isAutoPilotOn = data.auto;
+                    let btn = document.getElementById('btn-autopilot');
+                    if (isAutoPilotOn) {
+                        btn.style.backgroundColor = '#2ecc71'; // Verde
+                        btn.innerText = '🤖 AUTO-PILOT: ON';
+                    } else {
+                        btn.style.backgroundColor = '#e74c3c'; // Roșu
+                        btn.innerText = '🤖 AUTO-PILOT: OFF';
+                    }
+                });
+        }
+    </script>
+
+    <script src="/static/app.js?v=29"></script>
 </body>
 
 </html>

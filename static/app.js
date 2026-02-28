@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('touchcancel', stopDrawing);
         document.addEventListener('touchmove', Draw, { passive: false });
 
-        canvas.addEventListener('mouseleave', stopDrawing);
+        //canvas.addEventListener('mouseleave', stopDrawing);
         window.addEventListener('blur', stopDrawing);
 
         setTimeout(resize, 100);
@@ -204,7 +204,7 @@ setInterval(() => {
             const hudDist = document.getElementById("hud-distance");
             const hudAlert = document.getElementById("hud-alert");
             if (hudDist) {
-                if (data.distance_cm > 0 && data.distance_cm < 20) {
+                if (data.distance_cm > 2 && data.distance_cm < 20) {
                     hudDist.style.color = "red";
                     hudDist.style.borderColor = "red";
                     if (hudAlert) hudAlert.style.display = "block";

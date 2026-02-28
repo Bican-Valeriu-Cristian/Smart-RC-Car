@@ -30,7 +30,7 @@ GPIO.output(PIN_LED_ROSU, GPIO.LOW)
 GPIO.output(PIN_LED_VERDE, GPIO.LOW)
 
 # INIȚIALIZARE PWM PENTRU BUZZER (Hz)
-buzzer_pwm = GPIO.PWM(PIN_BUZZER, 2000)
+buzzer_pwm = GPIO.PWM(PIN_BUZZER, 500)
 
 # VARIABILE GLOBALE
 sensor_data = {
@@ -54,7 +54,6 @@ if not os.path.exists(LOG_FILE):
         writer = csv.writer(f)
         writer.writerow(["Data_Ora", "Gaz_Volti", "Temperatura", "Umiditate", "Alerta_Gaz"])
 
-# FUNCȚIE PENTRU A PRIMI DISTANȚĂ DIN APP.PY
 def set_distance(dist):
     with data_lock:
         sensor_data["distance_cm"] = dist
@@ -62,7 +61,7 @@ def set_distance(dist):
 def sensor_loop():
     global sensor_data
     
-    # 1. INIȚIALIZARE SENZORI
+    # INIȚIALIZARE SENZORI
     try:
         i2c = busio.I2C(board.SCL, board.SDA)
         ads = ADS1115(i2c)
@@ -73,6 +72,9 @@ def sensor_loop():
         return
 
     print("Senzorii au pornit. Se înregistrează datele în 'istoric_date.csv'...")
+
+    # Variabilă pentru a ține minte dacă am bipăit deja
+    alarma_activa = False 
 
     while _running:
         try:
@@ -92,8 +94,8 @@ def sensor_loop():
                 dist = sensor_data["distance_cm"]
 
             # C. EVALUARE PERICOL
-            is_gas_danger = volts > 2.5
-            is_dist_danger = (0 < dist < SAFE_DISTANCE_CM)
+            is_gas_danger = volts > 3
+            is_dist_danger = (2 < dist < SAFE_DISTANCE_CM)
             
             is_danger = is_gas_danger or is_dist_danger
 
@@ -116,24 +118,34 @@ def sensor_loop():
                     sensor_data["hum"] = int(h)
                 sensor_data["last_update"] = time.time()
 
-            # F. LOGICA ALARMĂ FIZICĂ
+            # F. LOGICA ALARMĂ FIZICĂ (Bipăie doar o dată)
             if is_danger:
                 GPIO.output(PIN_LED_ROSU, GPIO.HIGH)
                 GPIO.output(PIN_LED_VERDE, GPIO.LOW)
                 
-                # Bip de 4 ori 
-                for _ in range(4):
-                    buzzer_pwm.start(50)
-                    time.sleep(0.25)
-                    buzzer_pwm.stop()
-                    time.sleep(0.25)
+                # Dacă alarma nu a fost încă declanșată pentru acest eveniment
+                if not alarma_activa:
+                    print("Atenție! Pericol detectat!")
+                    # Bip de 2 ori (cum aveai în cod, dar se va executa o singură dată per eveniment)
+                    for _ in range(2):
+                        buzzer_pwm.start(50)
+                        time.sleep(0.1)
+                        buzzer_pwm.stop()
+                        time.sleep(0.1)
+                    
+                    # Marcăm că am sunat deja
+                    alarma_activa = True 
             else:
                 GPIO.output(PIN_LED_ROSU, GPIO.LOW)
                 GPIO.output(PIN_LED_VERDE, GPIO.HIGH)
                 buzzer_pwm.stop()
                 
-                # Așteptăm 1 secundă 
-                time.sleep(1.0)
+                # Resetăm alarma pentru când va apărea un pericol nou
+                alarma_activa = False
+            
+            # Pauză constantă de 1 secundă indiferent dacă e pericol sau nu
+            # Previne spam-ul de date în CSV și "prăjirea" procesorului
+            time.sleep(1.0)
 
         except Exception as e:
             print(f"Eroare în bucla de senzori: {e}")
