@@ -14,7 +14,7 @@ current_ny = 0.0
 TURN_K = 1.0
 app_running = True
 AUTO_MODE = False
-PRAG_PERICOL_AI = 130  # Cat de aproape pana sa vireze(mai mic = vireaza mai devreme)
+PRAG_PERICOL_AI = 140  # Cat de aproape pana sa vireze(mai mic = vireaza mai devreme)
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))

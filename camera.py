@@ -123,13 +123,14 @@ def camera_loop():
     global latest_frame_bgr
     while _running:
         try:
+            
             frame = cam.capture_array()
             with data_lock:
                 latest_frame_bgr = frame
             
             new_frame_event_web.set()
             new_frame_event_ai.set()
-            
+          
         except Exception as e:
             print(f"Eroare la captura camerei: {e}")
             time.sleep(0.5)
@@ -150,6 +151,7 @@ def ai_loop():
                 frame_de_analizat = latest_frame_bgr.copy()
             
             try:
+             
                 # Procesăm poza prin MiDaS: Ne întoarce harta de adâncime și scorurile pentru Stânga, Centru, Dreapta
                 depth_map, s, c, d = detector.process_frame(frame_de_analizat)
                 
@@ -157,7 +159,7 @@ def ai_loop():
                 depth_colored = cv2.applyColorMap(depth_map, cv2.COLORMAP_INFERNO)
                 depth_visual_resized = cv2.resize(depth_colored, (640, 360))
                 
-                
+            
                 with data_lock:
                     ai_scores = (s, c, d)
                     depth_visual_global = depth_visual_resized
