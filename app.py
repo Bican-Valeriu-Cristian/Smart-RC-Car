@@ -4,49 +4,52 @@ import sensor
 import env_sensors 
 import threading
 import time
-from camera import mjpeg, cleanup as camera_cleanup, set_mod_vizualizare, get_ai_scores
+
+# Importăm funcțiile din camera.py (inclusiv get_aruco_position)
+from camera import mjpeg, cleanup as camera_cleanup, set_mod_vizualizare, get_ai_scores, get_aruco_position
 
 app = Flask(__name__)
 
-# CONSTANTE SIGURANȚĂ
+# --- CONSTANTE SIGURANȚĂ ---
 SAFE_DISTANCE_CM = 20.0
 current_ny = 0.0
 TURN_K = 1.0
 app_running = True
 AUTO_MODE = False
-PRAG_PERICOL_AI = 140  # Cat de aproape pana sa vireze(mai mic = vireaza mai devreme)
+ACC_MODE = False
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
-
 
 def safety_watchdog():
     global current_ny, app_running 
     
     while app_running:  
         try:  
-            
             dist = sensor.get_distance()
             env_sensors.set_distance(dist)
             
             # Watchdog-ul intervine DOAR pe condusul manual 
-            if dist > 2 and dist < SAFE_DISTANCE_CM and current_ny > 0 and not AUTO_MODE:
-                print(f"Watchdog Manual: ZID la {dist}cm -> STOP FORTAT")
+            if 2 < dist < SAFE_DISTANCE_CM and current_ny > 0 and not AUTO_MODE:
+                print(f"Watchdog Manual: ZID la {dist:.1f}cm -> STOP FORTAT")
                 motor.stop()
                 current_ny = 0 
-        except Exception:
+        except Exception as e:
             pass
             
         time.sleep(0.1)
 
-# RUTE 
+# ==========================================
+# --- RUTE WEB ---
+# ==========================================
+
 @app.route('/')
 def index():
     try:
         with open("index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return "Eroare: Fisierul index.html lipseste!"
+        return "Eroare: Fișierul index.html lipsește!", 404
 
 @app.route('/schimba_mod', methods=['POST'])
 def schimba_mod():
@@ -58,27 +61,27 @@ def schimba_mod():
 
 @app.route('/video')
 def video():
-    return Response(mjpeg(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/telemetry')
 def route_telemetry():
     env_data = env_sensors.get_data()
     
     response = {
-        "distance_cm": env_data["distance_cm"],
-        "gas_volts": env_data["gas_volts"],
-        "gas_alert": env_data["gas_alert"],
-        "temp": env_data["temp"],
-        "hum": env_data["hum"]
+        "distance_cm": env_data.get("distance_cm", 0),
+        "gas_volts": env_data.get("gas_volts", 0),
+        "gas_alert": env_data.get("gas_alert", False),
+        "temp": env_data.get("temp", 0),
+        "hum": env_data.get("hum", 0),
+        "auto_mode": AUTO_MODE
     }
     return jsonify(response)
 
 @app.route('/drive', methods=['POST'])
 def drive():
     global current_ny
-    if AUTO_MODE:
-        return jsonify(ok=False, msg="Auto-Pilot ON")
+    if AUTO_MODE or ACC_MODE:
+        return jsonify(ok=False, msg="Mod Autonom ON")
 
     d = request.get_json(silent=True) or {}
     x = int(d.get('x', 0))
@@ -96,9 +99,9 @@ def drive():
     left = int(left_u * speed)
     right = int(right_u * speed)
 
-    # Verificare pentru modul manual
+    # Verificare de siguranță pentru modul manual
     env_data = env_sensors.get_data()
-    dist = env_data["distance_cm"]
+    dist = env_data.get("distance_cm", 999)
     
     if 2 < dist < SAFE_DISTANCE_CM and ny > 0:
         left = 0
@@ -112,85 +115,185 @@ def drive():
 
 @app.route('/toggle_auto', methods=['POST'])
 def toggle_auto():
-    global AUTO_MODE, current_ny
+    global AUTO_MODE, ACC_MODE, current_ny
     AUTO_MODE = not AUTO_MODE
     
-    if not AUTO_MODE:
-        motor.stop() 
+    if AUTO_MODE:
+        ACC_MODE = False  # Oprim ACC-ul dacă era pornit
         current_ny = 0 
-        print("Autopilot DEZACTIVAT")
+        print("Mod Prădător (Căutare ArUco) ACTIVAT")
     else:
-        current_ny = 0 
-        print("Autopilot ACTIVAT")
+        motor.stop() 
+        print("Mod Prădător DEZACTIVAT")
         
     return jsonify(auto=AUTO_MODE)
 
-# --- AUTOPILOT (FSM) ---
-def auto_pilot_loop():
-    global AUTO_MODE
+@app.route('/toggle_acc', methods=['POST'])
+def toggle_acc():
+    global AUTO_MODE, ACC_MODE, current_ny
+    ACC_MODE = not ACC_MODE
     
-    VITEZA_FATA = 40    
+    if ACC_MODE:
+        AUTO_MODE = False  # Oprim Auto-Pilot-ul normal dacă era pornit
+        current_ny = 0 
+        print("Mod ACC (Urmărire Ultrasonică + ArUco) ACTIVAT")
+    else:
+        motor.stop() 
+        print("Mod ACC DEZACTIVAT")
+        
+    return jsonify(acc=ACC_MODE)
+
+# ==========================================
+# --- SISTEME AUTONOME (FSM & ACC) ---
+# ==========================================
+
+def auto_pilot_loop():
+    global AUTO_MODE, ACC_MODE
+    
+    # Constante Auto-Pilot FSM (Prădător)
+    VITEZA_FATA = 45   
     VITEZA_VIRAJ = 50   
+    VITEZA_CAUTARE = 35   
+    VITEZA_APROPIERE = 60 
+    PRAG_PERICOL_AI = 140
+    
+    # Constante ACC Hibrid
+    VITEZA_MAX_ACC = 60
+    VITEZA_MIN_ACC = 15    
+    DISTANTA_LIBER_ACC = 60.0  
+    DISTANTA_STOP_ACC = 10   
+    
+    # Memorie pentru căutare ArUco
+    cadre_lipsa_aruco = 100 
     
     while app_running:
-        if not AUTO_MODE:
+        # Dacă ambele sunt oprite, așteptăm (nu consumăm procesor)
+        if not AUTO_MODE and not ACC_MODE:
             time.sleep(0.5)
             continue
             
-        # 1. COLECTARE DATE: Citim din memorie 
-        env_data = env_sensors.get_data()
-        dist = env_data["distance_cm"]
-        stanga, centru, dreapta = get_ai_scores()
+        # ========================================================
+        # MODUL 1: ACC (Adaptive Cruise Control) HIBRID
+        # ========================================================
+        if ACC_MODE:
+            env_data = env_sensors.get_data()
+            dist_curenta = env_data.get("distance_cm", 999)
+            
         
-        # 2. STAREA 4: URGENȚĂ (Senzorul ultrasonic detectează un obstacol critic sub 15cm)
-        if 2 < dist < 15:
-            print("[FSM] Reflex Ultrasonic: OBSTACOL CRITIC! Evadare...")
-
             
-            motor.set_left(-VITEZA_FATA)
-            motor.set_right(-VITEZA_FATA)
-            time.sleep(0.8) 
-            
-            motor.set_left(VITEZA_VIRAJ) 
-            motor.set_right(-VITEZA_VIRAJ)
-            time.sleep(0.75)
-            
-            motor.stop()
-            time.sleep(0.75) 
-            continue 
-
-        # 3. STAREA 2 & 3: ANALIZĂ ȘI VIRAJ (AI-ul vizual vede un obstacol în față)
-        elif centru > PRAG_PERICOL_AI:
-            print(f"[FSM] Obstacol Video ({centru:.0f}). PUNEM FRÂNĂ...")
-            motor.stop()
-            time.sleep(0.75) 
-            
-            stanga_clar, _, dreapta_clar = get_ai_scores()
-            
-            # Comparăm părțile: Scorul mai mic înseamnă că obiectele sunt mai departe
-            if stanga_clar < dreapta_clar:
-                print(f"[FSM] Calea e mai liberă la STÂNGA (S:{stanga_clar:.0f} vs D:{dreapta_clar:.0f}) <-")
-                motor.set_left(-VITEZA_VIRAJ)
-                motor.set_right(VITEZA_VIRAJ)
+            # 1. CALCUL VITEZĂ (Senzor Ultrasonic)
+            if dist_curenta < 2 or dist_curenta <= DISTANTA_STOP_ACC:
+                viteza_baza = 0
+            elif dist_curenta >= DISTANTA_LIBER_ACC:
+                viteza_baza = VITEZA_MAX_ACC
             else:
-                print(f"[FSM] Calea e mai liberă la DREAPTA (S:{stanga_clar:.0f} vs D:{dreapta_clar:.0f}) ->")
-                motor.set_left(VITEZA_VIRAJ)
-                motor.set_right(-VITEZA_VIRAJ)
-            
-            time.sleep(0.75) 
-            
-            motor.stop()
-            time.sleep(0.75) 
-            
-        # 4. STAREA 1: NAVIGARE NORMALĂ (Drum liber)
-        else:
-            motor.set_left(VITEZA_FATA)
-            motor.set_right(VITEZA_FATA)
-            
-        time.sleep(0.1) 
+                procent_liber = (dist_curenta - DISTANTA_STOP_ACC) / (DISTANTA_LIBER_ACC - DISTANTA_STOP_ACC)
+                viteza_baza = int(VITEZA_MIN_ACC + (procent_liber * (VITEZA_MAX_ACC - VITEZA_MIN_ACC)))
 
+            # 2. CALCUL DIRECȚIE (Cameră ArUco)
+            pozitie_x = get_aruco_position(target_id=6) 
+            
+            if viteza_baza > 0:
+                if pozitie_x is not None:
+                    # Vede markerul -> Calculează virajul și trage de volan
+                    K_VIRAJ = 30 
+                    corectie = int(pozitie_x * K_VIRAJ)
+                    
+                    # Nu lăsăm motoarele să depășească plafonul VITEZA_MAX_ACC
+                    motor_stanga = clamp(viteza_baza + corectie, 0, VITEZA_MAX_ACC)
+                    motor_dreapta = clamp(viteza_baza - corectie, 0, VITEZA_MAX_ACC)
+                    
+                    motor.set_left(motor_stanga)
+                    motor.set_right(motor_dreapta)
+                    print(f"[ACC+ArUco] Dist: {dist_curenta:.1f}cm | Vit: {viteza_baza}% | Viraj: {corectie}")
+                else:
+                    # MODIFICAT: Nu vede markerul -> Merge drept ca un ACC normal
+                    motor.set_left(viteza_baza)
+                    motor.set_right(viteza_baza)
+                    print(f"[ACC NORMAL] Dist: {dist_curenta:.1f}cm | Merg drept cu: {viteza_baza}%")
+            else:
+                # E prea aproape de obstacol (sub DISTANTA_STOP_ACC)
+                motor.stop()
+                print(f"[ACC] Frână pusă! Obstacol la {dist_curenta:.1f}cm.")
+                
+            time.sleep(0.1)
+            continue
+            
+       # ========================================================
+        # MODUL 2: AUTO-PILOT NORMAL (Explorare + Interceptare ArUco)
+        # ========================================================
+        if AUTO_MODE:
+            env_data = env_sensors.get_data()
+            dist = env_data.get("distance_cm", 999)
+            
+            stanga, centru, dreapta = get_ai_scores()
+            pozitie_x = get_aruco_position(target_id=6)
+            
+            # --- STAREA 1: VEDE MARKERUL (Prioritate maximă: Aliniere și Oprire) ---
+            if pozitie_x is not None:
+                if dist <= 25:
+                    print(f"[FSM] GATA! Am ajuns în fața codului la {dist:.1f}cm.")
+                    motor.stop()
+                    AUTO_MODE = False  # Pune pauză totală
+                else:
+                    # Virează spre cod în timp ce merge în față
+                    K_VIRAJ = 40 # Cât de agresiv ia de volan (poți regla)
+                    corectie = int(pozitie_x * K_VIRAJ)
+                    
+                    # Permitem motoarelor să urce până la 100% ca să poată lua curba eficient
+                    m_stanga = clamp(VITEZA_FATA + corectie, 0, 100)
+                    m_dreapta = clamp(VITEZA_FATA - corectie, 0, 100)
+                    
+                    motor.set_left(m_stanga)
+                    motor.set_right(m_dreapta)
+                    print(f"[FSM] Mă duc spre cod! Viraj: {corectie}")
+                    
+                time.sleep(0.1)
+                continue # Sare peste detectarea de pereți ca să se concentreze doar pe marker
+
+            # --- STAREA 2: EVITARE URGENȚĂ (Zid la sub 15cm) ---
+            if 2 < dist < 15:
+                print("[FSM] Zid fizic! Dau cu spatele...")
+                motor.set_left(-VITEZA_FATA)
+                motor.set_right(-VITEZA_FATA)
+                time.sleep(0.8) 
+                motor.set_left(VITEZA_VIRAJ) 
+                motor.set_right(-VITEZA_VIRAJ)
+                time.sleep(0.75)
+                motor.stop()
+                continue 
+
+            # --- STAREA 3: OCOLIRE OBSTACOLE CU MIDAS (AI) ---
+            elif centru > PRAG_PERICOL_AI:
+                print("[FSM] Obstacol văzut de AI. Ocolesc...")
+                motor.stop()
+                time.sleep(0.5) 
+                
+                stanga_clar, _, dreapta_clar = get_ai_scores()
+                if stanga_clar < dreapta_clar:
+                    motor.set_left(-VITEZA_VIRAJ)
+                    motor.set_right(VITEZA_VIRAJ)
+                else:
+                    motor.set_left(VITEZA_VIRAJ)
+                    motor.set_right(-VITEZA_VIRAJ)
+                
+                time.sleep(0.75) 
+                motor.stop()
+                
+            # --- STAREA 4: PLIMBARE LIBERĂ (Nu vede nici cod, nici zid) ---
+            else:
+                motor.set_left(VITEZA_FATA)
+                motor.set_right(VITEZA_FATA)
+                
+            time.sleep(0.1)
+
+
+# ==========================================
+# --- PUNCT DE INTRARE APLICAȚIE ---
+# ==========================================
 if __name__ == '__main__':
     try:
+        # Pornire thread-uri de background
         t = threading.Thread(target=safety_watchdog, daemon=True)
         t.start()
 
@@ -206,10 +309,11 @@ if __name__ == '__main__':
         print("\nOprire server...")
         
     finally:
+        # Semnalăm thread-urilor să se oprească
         app_running = False  
         time.sleep(0.5)      
         
-        print("Curățare resurse...")
+        print("Curățare resurse hardware...")
         try: motor.cleanup()
         except: pass
         try: camera_cleanup()

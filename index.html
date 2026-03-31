@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart RC Dashboard</title>
 
-    <link rel="stylesheet" href="/static/style.css?v=29">
+    <link rel="stylesheet" href="/static/style.css?v=31">
     <script src="/static/chart.min.js"></script>
     <script src="/static/gauge.min.js"></script>
 </head>
@@ -18,7 +18,7 @@
     <div class="page">
         <div class="panel video-wrap">
             <div class="video-container">
-                <img src="/video" alt="Video Feed" id="video-feed" style="width: 100%; max-width: 640px; height: auto;">
+                <img src="/video" alt="Video Feed" id="video-feed" style="width: 100%; max-width: 750px; height: auto;">
 
                 <div id="hud-overlay">
                     <div id="hud-distance">DIST: -- cm</div>
@@ -43,21 +43,22 @@
                     <div id="text-hum">Umiditate: -- %</div>
                 </div>
 
-                <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
-                <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ccc;">Control Cameră</h4>
-                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <button onclick="schimbaMod('normal')"
-                        style="flex: 1; padding: 10px; font-size: 13px; font-weight: bold; cursor: pointer; background-color: #3498db; color: white; border: none; border-radius: 5px;">
+                <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0; width: 100%;">
+                <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ccc;">Control Cameră & Navigare</h4>
+
+                <div class="panou-butoane">
+                    <button onclick="schimbaMod('normal')" class="btn-panou btn-normal">
                         📷 Vedere Normală
                     </button>
-                    <button onclick="schimbaMod('midas')"
-                        style="flex: 1; padding: 10px; font-size: 13px; font-weight: bold; cursor: pointer; background-color: #e67e22; color: white; border: none; border-radius: 5px;">
+                    <button onclick="schimbaMod('midas')" class="btn-panou btn-midas">
                         🔥 Vedere Adâncime
                     </button>
-                    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
-                    <button id="btn-autopilot" onclick="toggleAutoPilot()"
-                        style="width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background-color: #e74c3c; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.3s;">
-                        🤖 AUTO-PILOT: OFF
+
+                    <button id="btn-autopilot" class="btn-panou btn-oprit" onclick="toggleAutoPilot()">
+                        🧭 Auto-Pilot
+                    </button>
+                    <button id="btn-acc" class="btn-panou btn-oprit" onclick="toggleACC()">
+                        🚗 Mod ACC
                     </button>
                 </div>
             </div>
@@ -70,8 +71,6 @@
                 </p>
                 <h3 class="joy-header">Control Manual</h3>
                 <canvas id="canvas" name="game"></canvas>
-
-
             </div>
 
         </div>
@@ -89,26 +88,48 @@
             });
         }
 
-        // Script pentru Autopiloty
+        // Script pentru Auto-Pilot și ACC (Se exclud reciproc)
         let isAutoPilotOn = false;
+        let isAccOn = false;
+
         function toggleAutoPilot() {
             fetch('/toggle_auto', { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
                     isAutoPilotOn = data.auto;
-                    let btn = document.getElementById('btn-autopilot');
+                    let btnAuto = document.getElementById('btn-autopilot');
+                    let btnAcc = document.getElementById('btn-acc');
+
                     if (isAutoPilotOn) {
-                        btn.style.backgroundColor = '#2ecc71'; // Verde
-                        btn.innerText = '🤖 AUTO-PILOT: ON';
+                        btnAuto.classList.add('active-auto');
+                        btnAcc.classList.remove('active-acc');
+                        isAccOn = false;
                     } else {
-                        btn.style.backgroundColor = '#e74c3c'; // Roșu
-                        btn.innerText = '🤖 AUTO-PILOT: OFF';
+                        btnAuto.classList.remove('active-auto');
+                    }
+                });
+        }
+
+        function toggleACC() {
+            fetch('/toggle_acc', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    isAccOn = data.acc;
+                    let btnAuto = document.getElementById('btn-autopilot');
+                    let btnAcc = document.getElementById('btn-acc');
+
+                    if (isAccOn) {
+                        btnAcc.classList.add('active-acc');
+                        btnAuto.classList.remove('active-auto');
+                        isAutoPilotOn = false;
+                    } else {
+                        btnAcc.classList.remove('active-acc');
                     }
                 });
         }
     </script>
 
-    <script src="/static/app.js?v=29"></script>
+    <script src="/static/app.js?v=31"></script>
 </body>
 
 </html>

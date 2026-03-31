@@ -242,6 +242,25 @@ setInterval(() => {
             if (textHum && data.hum > 0) {
                 textHum.innerText = `Umiditate: ${data.hum} %`;
             }
+
+            // ------------------------------------------------------------------
+            // D. SINCRONIZARE BUTON AUTO-PILOT (Se stinge când misiunea e gata)
+            // ------------------------------------------------------------------
+            // ATENȚIE: Înlocuiește 'btn-autopilot' cu ID-ul real al butonului tău din HTML!
+            const autoButton = document.getElementById('btn-autopilot');
+
+            if (autoButton) {
+                // Folosim clasele din CSS-ul tău pentru a păstra efectele de neon și border!
+                if (data.auto_mode === true) {
+                    autoButton.classList.add("active-auto"); // Îi dă verdele #2ecc71 și umbra
+                    autoButton.classList.remove("btn-oprit");
+                } else {
+                    autoButton.classList.remove("active-auto");
+                    autoButton.classList.add("btn-oprit");   // Revine la gri-ul #444 și border #222
+                }
+            }
+            // ------------------------------------------------------------------
+
         })
         .catch(e => {
             console.error("Eroare la preluarea telemetriei:", e);

@@ -259,6 +259,62 @@ canvas {
     border-radius: 4px;
 }
 
+
+/* ========================================================= */
+/* --- PANOU CONTROL UNIFICAT (Cameră & Autonomie) --- */
+/* (ACEST BLOC TREBUIE SĂ STEA ÎN AFARA REGULILOR DE MOBIL) */
+/* ========================================================= */
+
+.panou-butoane {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.btn-panou {
+    flex: 1 1 45%;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    transition: 0.3s all;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-normal {
+    background-color: #3498db;
+}
+
+.btn-midas {
+    background-color: #e67e22;
+}
+
+.btn-oprit {
+    background-color: #444;
+    border: 2px solid #222;
+}
+
+.btn-panou.active-auto {
+    background-color: #2ecc71;
+    border-color: #27ae60;
+    box-shadow: 0 0 15px rgba(46, 204, 113, 0.4);
+}
+
+.btn-panou.active-acc {
+    background-color: #9b59b6;
+    border-color: #8e44ad;
+    box-shadow: 0 0 15px rgba(155, 89, 182, 0.4);
+}
+
+.btn-panou:hover {
+    filter: brightness(1.15);
+}
+
 /* --- RESPONSIVE (Mobil/Tabletă) --- */
 @media (max-width: 1000px) {
     .page {
