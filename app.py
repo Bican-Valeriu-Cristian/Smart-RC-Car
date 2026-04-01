@@ -6,7 +6,7 @@ import threading
 import time
 
 # Importăm funcțiile din camera.py (inclusiv get_aruco_position)
-from camera import mjpeg, cleanup as camera_cleanup, set_mod_vizualizare, get_ai_scores, get_aruco_position
+from camera import mjpeg, cleanup as camera_cleanup, set_mod_vizualizare, get_ai_scores, get_aruco_position,set_auto_active
 
 app = Flask(__name__)
 
@@ -125,7 +125,7 @@ def toggle_auto():
     else:
         motor.stop() 
         print("Mod Prădător DEZACTIVAT")
-        
+    set_auto_active(AUTO_MODE or ACC_MODE)    
     return jsonify(auto=AUTO_MODE)
 
 @app.route('/toggle_acc', methods=['POST'])
@@ -140,7 +140,7 @@ def toggle_acc():
     else:
         motor.stop() 
         print("Mod ACC DEZACTIVAT")
-        
+    set_auto_active(AUTO_MODE or ACC_MODE)   
     return jsonify(acc=ACC_MODE)
 
 # ==========================================
@@ -155,13 +155,15 @@ def auto_pilot_loop():
     VITEZA_VIRAJ = 50   
     VITEZA_CAUTARE = 35   
     VITEZA_APROPIERE = 60 
-    PRAG_PERICOL_AI = 140
+    PRAG_PERICOL_AI = 130
     
     # Constante ACC Hibrid
-    VITEZA_MAX_ACC = 60
+    VITEZA_MAX_ACC = 50
     VITEZA_MIN_ACC = 15    
     DISTANTA_LIBER_ACC = 60.0  
-    DISTANTA_STOP_ACC = 10   
+    DISTANTA_STOP_ACC = 15  
+
+    memorie_urmarire = 0 
     
     # Memorie pentru căutare ArUco
     cadre_lipsa_aruco = 100 
@@ -196,7 +198,7 @@ def auto_pilot_loop():
             if viteza_baza > 0:
                 if pozitie_x is not None:
                     # Vede markerul -> Calculează virajul și trage de volan
-                    K_VIRAJ = 30 
+                    K_VIRAJ = 50 
                     corectie = int(pozitie_x * K_VIRAJ)
                     
                     # Nu lăsăm motoarele să depășească plafonul VITEZA_MAX_ACC
@@ -219,8 +221,7 @@ def auto_pilot_loop():
             time.sleep(0.1)
             continue
             
-       # ========================================================
-        # MODUL 2: AUTO-PILOT NORMAL (Explorare + Interceptare ArUco)
+      # MODUL 2: AUTO-PILOT NORMAL (Explorare + Interceptare ArUco)
         # ========================================================
         if AUTO_MODE:
             env_data = env_sensors.get_data()
@@ -231,13 +232,13 @@ def auto_pilot_loop():
             
             # --- STAREA 1: VEDE MARKERUL (Prioritate maximă: Aliniere și Oprire) ---
             if pozitie_x is not None:
-                if dist <= 25:
+                if dist <= 30:
                     print(f"[FSM] GATA! Am ajuns în fața codului la {dist:.1f}cm.")
                     motor.stop()
                     AUTO_MODE = False  # Pune pauză totală
                 else:
                     # Virează spre cod în timp ce merge în față
-                    K_VIRAJ = 40 # Cât de agresiv ia de volan (poți regla)
+                    K_VIRAJ = 45 # Cât de agresiv ia de volan (poți regla)
                     corectie = int(pozitie_x * K_VIRAJ)
                     
                     # Permitem motoarelor să urce până la 100% ca să poată lua curba eficient
@@ -252,11 +253,13 @@ def auto_pilot_loop():
                 continue # Sare peste detectarea de pereți ca să se concentreze doar pe marker
 
             # --- STAREA 2: EVITARE URGENȚĂ (Zid la sub 15cm) ---
-            if 2 < dist < 15:
+            if 2 < dist < 10:
                 print("[FSM] Zid fizic! Dau cu spatele...")
                 motor.set_left(-VITEZA_FATA)
                 motor.set_right(-VITEZA_FATA)
-                time.sleep(0.8) 
+                time.sleep(1)
+                motor.stop()
+                time.sleep(1)
                 motor.set_left(VITEZA_VIRAJ) 
                 motor.set_right(-VITEZA_VIRAJ)
                 time.sleep(0.75)

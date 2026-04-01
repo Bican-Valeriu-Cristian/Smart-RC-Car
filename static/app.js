@@ -200,20 +200,25 @@ setInterval(() => {
     fetch('/telemetry')
         .then(r => r.json())
         .then(data => {
-            // A. HUD Distanță
+            // A. HUD Distanță (Avertizare mică și discretă)
             const hudDist = document.getElementById("hud-distance");
-            const hudAlert = document.getElementById("hud-alert");
+            const hudAlert = document.getElementById("hud-alert"); // Îl vom ține ascuns mereu
+
             if (hudDist) {
+                // Ascundem definitiv cutia uriașă de pe mijlocul ecranului
+                if (hudAlert) hudAlert.style.display = "none";
+
                 if (data.distance_cm > 2 && data.distance_cm < 20) {
-                    hudDist.style.color = "red";
-                    hudDist.style.borderColor = "red";
-                    if (hudAlert) hudAlert.style.display = "block";
+                    // Face textul mic de jos roșu și îi adaugă simbolul de pericol
+                    hudDist.style.color = "#ff0055"; // neon-red
+                    hudDist.style.borderColor = "#ff0055";
+                    hudDist.innerText = `DIST: ${data.distance_cm} cm ⚠️ PERICOL`;
                 } else {
+                    // Când e drum liber, revine la verde normal
                     hudDist.style.color = "#00ff00";
                     hudDist.style.borderColor = "#00ff00";
-                    if (hudAlert) hudAlert.style.display = "none";
+                    hudDist.innerText = `DIST: ${data.distance_cm} cm`;
                 }
-                hudDist.innerText = `DIST: ${data.distance_cm} cm`;
             }
 
             // B. Gauge Gaz

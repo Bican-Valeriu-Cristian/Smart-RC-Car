@@ -96,7 +96,7 @@ aruco_target_x = None
 _running = True              
 MOD_VIZUALIZARE = "normal"   
 JPEG_PARAMS = [int(cv2.IMWRITE_JPEG_QUALITY), 70] 
-
+IS_AUTO_ACTIVE = False # <--- TREBUIE SĂ FIE AICI
 # lock thread pentru a proteja accesul la variabilele globale între thread-uri (Camera, AI, Web)
 data_lock = threading.Lock()
 
@@ -113,6 +113,11 @@ def set_mod_vizualizare(mod):
 def get_ai_scores():
     with data_lock: 
         return ai_scores
+
+def set_auto_active(stare):
+    global IS_AUTO_ACTIVE
+    with data_lock:
+        IS_AUTO_ACTIVE = stare
 
 # Funcție nouă pentru APP.PY ca să ceară poziția markerului
 def get_aruco_position(target_id=6):
