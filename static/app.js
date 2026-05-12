@@ -143,7 +143,7 @@ function Draw(event) {
         if (y_percent < -100) y_percent = -100;
 
         var speed = Math.round(Math.sqrt(Math.pow(x_percent, 2) + Math.pow(y_percent, 2)));
-        if (speed > 100) speed = 100;
+        if (speed > 60) speed = 60;
 
         updateUI(x_percent, y_percent, speed);
         send(x_percent, y_percent, speed, angle_in_degrees);
@@ -166,35 +166,33 @@ var gasGauge = null;
 
 function initChartsSafe() {
     try {
-        // --- GAUGE GAZ ---
         if (typeof Gauge !== 'undefined') {
             var gaugeOpts = {
                 angle: 0.0, lineWidth: 0.2, radiusScale: 0.9,
                 pointer: { length: 0.45, strokeWidth: 0.035, color: '#ccc' },
                 limitMax: false, limitMin: false,
-                colorStart: '#6FADCF', colorStop: '#8FC0DA', strokeColor: '#222',
                 generateGradient: true, highDpiSupport: true,
+                // Culorile desenate fizic de la Stânga la Dreapta
                 staticZones: [
-                    { strokeStyle: "#30B32D", min: 0, max: 2 },
-                    { strokeStyle: "#FFDD00", min: 2, max: 3 },
-                    { strokeStyle: "#F03E3E", min: 3, max: 5.0 }
+                    { strokeStyle: "#30B32D", min: 0, max: 50 },   // VERDE (Stânga)
+                    { strokeStyle: "#FFDD00", min: 50, max: 75 },  // GALBEN (Mijloc)
+                    { strokeStyle: "#F03E3E", min: 75, max: 100 }  // ROȘU (Dreapta)
                 ],
             };
             var target = document.getElementById('gasGauge');
             if (target) {
                 target.height = 90;
                 gasGauge = new Gauge(target).setOptions(gaugeOpts);
-                gasGauge.maxValue = 5.0;
-                gasGauge.setMinValue(0);
+                gasGauge.maxValue = 100;   // Limita dreaptă
+                gasGauge.setMinValue(0);   // Limita stângă
                 gasGauge.animationSpeed = 32;
-                gasGauge.set(0);
+                gasGauge.set(0); // La pornire, trimitem acul în stânga de tot (pe verde)
             }
         }
     } catch (e) {
         console.error("Eroare initializare grafice:", e);
     }
 }
-
 // 3. COMUNICARE SERVER 
 setInterval(() => {
     fetch('/telemetry')
@@ -221,19 +219,37 @@ setInterval(() => {
                 }
             }
 
-            // B. Gauge Gaz
-            if (gasGauge) gasGauge.set(data.gas_volts);
-            const gasVal = document.getElementById("gas-value");
-            if (gasVal) gasVal.innerText = data.gas_volts.toFixed(2);
+            // B. Gauge Gaz (Calitate Aer)
+            let voltaj = data.gas_volts;
+            voltaj = Math.max(0, Math.min(5, voltaj)); // Limităm între 0V și 5V
 
+            // 1. Calculăm unde stă acul (0V = stânga/0, 5V = dreapta/100)
+            let pozitie_ac = Math.round((voltaj / 5) * 100);
+
+            // Mutăm acul pe grafic (de la stânga spre dreapta)
+            if (gasGauge) gasGauge.set(pozitie_ac);
+
+            // 2. Calculăm procentul afișat (invers față de ac!)
+            // Când acul e în stânga (0), calitatea e 100%. Când acul e în dreapta (100), calitatea e 0%.
+            let calitate_aer = 100 - pozitie_ac;
+
+            const gasVal = document.getElementById("gas-value");
+            if (gasVal) gasVal.innerText = calitate_aer;
+
+            // 3. Afișăm statusul
             const gasStatus = document.getElementById("gas-status");
             if (gasStatus) {
-                if (data.gas_alert) {
-                    gasStatus.innerText = "⚠️ DETECȚIE GAZ!";
-                    gasStatus.style.color = "red";
-                } else {
-                    gasStatus.innerText = "AER CURAT";
-                    gasStatus.style.color = "#888";
+                if (voltaj <= 2.5) {
+                    gasStatus.innerText = "🟢 AER CURAT";
+                    gasStatus.style.color = "#30B32D"; // Verde
+                }
+                else if (voltaj <= 3.75) {
+                    gasStatus.innerText = "🟡 AVERTIZARE FUM/GAZ";
+                    gasStatus.style.color = "#FFDD00"; // Galben
+                }
+                else {
+                    gasStatus.innerText = "🔴 PERICOL TOXICITATE";
+                    gasStatus.style.color = "#F03E3E"; // Roșu
                 }
             }
 

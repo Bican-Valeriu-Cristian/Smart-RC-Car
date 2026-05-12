@@ -158,7 +158,7 @@ def auto_pilot_loop():
     PRAG_PERICOL_AI = 130
     
     # Constante ACC Hibrid
-    VITEZA_MAX_ACC = 50
+    VITEZA_MAX_ACC = 60
     VITEZA_MIN_ACC = 15    
     DISTANTA_LIBER_ACC = 60.0  
     DISTANTA_STOP_ACC = 15  

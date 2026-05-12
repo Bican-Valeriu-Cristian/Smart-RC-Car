@@ -18,7 +18,7 @@
     <div class="page">
         <div class="panel video-wrap">
             <div class="video-container">
-                <img src="/video" alt="Video Feed" id="video-feed" style="width: 100%; max-width: 750px; height: auto;">
+                <img src="/video" alt="Video Feed" id="video-feed" style="width: 100%; max-width: 900px; height: auto;">
 
                 <div id="hud-overlay">
                     <div id="hud-distance">DIST: -- cm</div>
@@ -30,10 +30,11 @@
         <div class="panel dashboard-panel">
 
             <div class="sensor-box">
-                <h3>Monitorizare Gaz (MQ-2)</h3>
+                <h3>Monitorizare Aer (MQ-2)</h3>
                 <canvas id="gasGauge"></canvas>
-                <div class="gauge-value"><span id="gas-value">0.00</span> V</div>
-                <div id="gas-status">AER CURAT</div>
+                <div class="gauge-value" style="font-size: 1.2em;">Calitate Aer: <span id="gas-value"
+                        style="font-weight: bold;">100</span> %</div>
+                <div id="gas-status" style="font-weight: bold; margin-top: 5px;">🟢 AER CURAT</div>
             </div>
 
             <div class="sensor-box">
