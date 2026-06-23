@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ro">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart RC Dashboard</title>
+
+    <link rel="stylesheet" href="/static/style.css?v=31">
+    <script src="/static/chart.min.js"></script>
+    <script src="/static/gauge.min.js"></script>
+</head>
+
+<body>
+
+    <h1>Sistem Monitorizare & Control</h1>
+
+    <div class="page">
+        <div class="panel video-wrap">
+            <div class="video-container">
+                <img src="/video" alt="Video Feed" id="video-feed" style="width: 100%; max-width: 900px; height: auto;">
+
+                <div id="hud-overlay">
+                    <div id="hud-distance">DIST: -- cm</div>
+                    <div id="hud-alert" style="display: none;">⚠️ PERICOL</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel dashboard-panel">
+
+            <div class="sensor-box">
+                <h3>Monitorizare Aer </h3>
+                <canvas id="gasGauge"></canvas>
+                <div class="gauge-value" style="font-size: 1.2em;">Calitate Aer: <span id="gas-value"
+                        style="font-weight: bold;">100</span> %</div>
+                <div id="gas-status" style="font-weight: bold; margin-top: 5px;">🟢 AER CURAT</div>
+            </div>
+
+            <div class="sensor-box">
+                <h3>Temperatură și Umiditate</h3>
+                <div class="env-box">
+                    <div id="text-temp">Temp: -- °C</div>
+                    <div id="text-hum">Umiditate: -- %</div>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0; width: 100%;">
+                <h4
+                    style="margin: 0 0 15px 0; font-size: 0.9rem; color: var(--text-muted);text-transform: uppercase;letter-spacing: 1px;">
+                    CONTROL CAMERĂ & NAVIGARE
+                </h4>
+
+                <div class="panou-butoane">
+                    <button onclick="schimbaMod('normal')" class="btn-panou btn-normal">
+                        📷 Vedere Normală
+                    </button>
+                    <button onclick="schimbaMod('midas')" class="btn-panou btn-midas">
+                        🔥 Vedere Adâncime
+                    </button>
+
+                    <button id="btn-autopilot" class="btn-panou btn-oprit" onclick="toggleAutoPilot()">
+                        🧭 Auto-Pilot
+                    </button>
+                    <button id="btn-acc" class="btn-panou btn-oprit" onclick="toggleACC()">
+                        🚗 Mod ACC
+                    </button>
+                </div>
+            </div>
+
+            <div class="sensor-box joystick-box">
+                <p class="telemetry">
+                    X: <span id="x_coordinate">0</span> |
+                    Y: <span id="y_coordinate">0</span> |
+                    Viteză: <span id="speed">0</span>%
+                </p>
+                <h3 class="joy-header">Control Manual</h3>
+                <canvas id="canvas" name="game"></canvas>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Script pentru camera
+        function schimbaMod(modulDorit) {
+            fetch('/schimba_mod', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'mod=' + modulDorit
+            }).then(response => {
+                if (response.ok) console.log("Cameră schimbată pe: " + modulDorit);
+            });
+        }
+
+        // Script pentru Auto-Pilot și ACC (Se exclud reciproc)
+        let isAutoPilotOn = false;
+        let isAccOn = false;
+
+        function toggleAutoPilot() {
+            fetch('/toggle_auto', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    isAutoPilotOn = data.auto;
+                    let btnAuto = document.getElementById('btn-autopilot');
+                    let btnAcc = document.getElementById('btn-acc');
+
+                    if (isAutoPilotOn) {
+                        btnAuto.classList.add('active-auto');
+                        btnAcc.classList.remove('active-acc');
+                        isAccOn = false;
+                    } else {
+                        btnAuto.classList.remove('active-auto');
+                    }
+                });
+        }
+
+        function toggleACC() {
+            fetch('/toggle_acc', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    isAccOn = data.acc;
+                    let btnAuto = document.getElementById('btn-autopilot');
+                    let btnAcc = document.getElementById('btn-acc');
+
+                    if (isAccOn) {
+                        btnAcc.classList.add('active-acc');
+                        btnAuto.classList.remove('active-auto');
+                        isAutoPilotOn = false;
+                    } else {
+                        btnAcc.classList.remove('active-acc');
+                    }
+                });
+        }
+    </script>
+
+    <script src="/static/app.js?v=31"></script>
+</body>
+
+</html>
